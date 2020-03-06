@@ -2,6 +2,8 @@ from nmigen import *
 from nmigen.back.pysim import *
 
 from alu import *
+from rom import *
+from ram import *
 
 ###############
 # CPU module: #
@@ -20,13 +22,17 @@ class CPU( Elaboratable ):
     self.alu = ALU()
     # The ROM submodule which acts as simulated program data storage.
     self.rom = ROM( [ 0x00000000 ] )
+    # The RAM submodule which simulates re-writable data storage.
+    # (512 bytes of RAM = 128 words)
+    self.ram = RAM( 128 )
 
   def elaborate( self, platform ):
     # Core CPU module.
     m = Module()
-    # Register the ALU and ROM submodules.
+    # Register the ALU, ROM and RAM submodules.
     m.submodules.alu = self.alu
     m.submodules.rom = self.rom
+    m.submodules.ram = self.ram
 
     # r31 is hard-wired to 0.
     m.d.comb += self.r[ 31 ].eq( 0x00000000 )
