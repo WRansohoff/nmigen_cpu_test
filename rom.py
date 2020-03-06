@@ -12,9 +12,10 @@ class ROM( Elaboratable ):
     # Data word output.
     self.out  = Signal( 32, reset = 0x00000000 )
     # Data storage.
-    self.data = []
-    for i in range( len( data ) ):
-      self.data.append( Signal( 32, reset = data[ i ] ) )
+    self.data = [
+      Signal( 32, reset = data[ i ], name = "rom(0x%08X)"%( i * 4 ) )
+      for i in range( len( data ) )
+    ]
     # Record size.
     self.size = len( data )
 
