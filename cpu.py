@@ -71,20 +71,6 @@ class CPU( Elaboratable ):
         m.d.sync += self.pc.eq( self.pc + 4 )
         m.next = "CPU_PC_LOAD"
     
-
-    # Dummy synchronous logic step so the test simulation works.
-    # This performs a preset ALU operation, then loads the result
-    # into R0 followed by R1. If you look at the waveform, it takes
-    # time for the result to propagate from ALU -> R0 -> R1.
-    m.d.sync += [
-      self.alu.a.eq( 0xFFFFFFFF ),
-      self.alu.b.eq( 0x1234ABCD ),
-      self.alu.f.eq( 0b101000 ),
-      self.alu.start.eq( 1 ),
-      self.r[ 0 ].eq( self.alu.y ),
-      self.r[ 1 ].eq( self.r[ 0 ] )
-    ]
-
     # End of CPU module definition.
     return m
 
