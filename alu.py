@@ -42,9 +42,6 @@ class ALU( Elaboratable ):
     # Core ALU module.
     m = Module()
 
-    # 'Counter' which determines how many cycles have elapsed in
-    # the current operation.
-    cnt = Signal( 2 )
     # Internal 'busy' signal.
     busy = Signal()
     # Latched input values.
