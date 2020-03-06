@@ -25,8 +25,18 @@ class CPU( Elaboratable ):
     # r31 is hard-wired to 0.
     m.d.comb += self.r[ 31 ].eq( 0x00000000 )
 
-    # Dummy 'sync' logic to let the simulation step.
-    m.d.sync += self.r[ 0 ].eq( self.alu.y )
+    # Dummy synchronous logic step so the test simulation works.
+    # This performs a preset ALU operation, then loads the result
+    # into R0 followed by R1. If you look at the waveform, it takes
+    # time for the result to propagate from ALU -> R0 -> R1.
+    m.d.sync += [
+      self.alu.a.eq( 0xFFFFFFFF ),
+      self.alu.b.eq( 0x1234ABCD ),
+      self.alu.f.eq( 0b101000 ),
+      self.alu.start.eq( 1 ),
+      self.r[ 0 ].eq( self.alu.y ),
+      self.r[ 1 ].eq( self.r[ 0 ] )
+    ]
 
     # End of CPU module definition.
     return m
@@ -37,6 +47,10 @@ class CPU( Elaboratable ):
 
 # Dummy test method (TODO: tests)
 def cpu_test( cpu ):
+  yield Tick()
+  yield Tick()
+  yield Tick()
+  yield Tick()
   yield Tick()
 
 # 'main' method to run a basic testbench.

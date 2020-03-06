@@ -45,6 +45,8 @@ class ALU( Elaboratable ):
     # 'Counter' which determines how many cycles have elapsed in
     # the current operation.
     cnt = Signal( 2 )
+    # Internal 'busy' signal.
+    busy = Signal()
     # Latched input values.
     xa  = Signal( 32 )
     xb  = Signal( 32 )
@@ -76,7 +78,8 @@ class ALU( Elaboratable ):
     with m.FSM() as fsm:
       # Latch input / function values when start = 1 in "IDLE" state.
       with m.State( "ALU_IDLE" ):
-        with m.If( self.start ):
+        m.d.comb += busy.eq( self.start )
+        with m.If( busy ):
           m.d.sync += [
             xa.eq( self.a ),
             xb.eq( self.b ),
@@ -89,10 +92,8 @@ class ALU( Elaboratable ):
       with m.State( "ALU_BUSY" ):
         # Set shared 'end of operation' values for the next cycle.
         m.next = "ALU_IDLE"
-        m.d.sync += [
-          self.start.eq( 0 ),
-          self.done.eq( 1 )
-        ]
+        m.d.comb += busy.eq( 0 )
+        m.d.sync += self.done.eq( 1 )
         # Perform ALU computations based on the 'function' bits.
         # Boolean unit (F = [...]):
         #  - 0b101000: Y = A AND B
