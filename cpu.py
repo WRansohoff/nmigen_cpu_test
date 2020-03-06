@@ -20,7 +20,7 @@ class CPU( Elaboratable ):
     # The ALU submodule which performs logical operations.
     self.alu = ALU()
     # The ROM submodule which acts as simulated program data storage.
-    self.rom = ROM( [ 0x00000000 ] )
+    self.rom = ROM( [ 0x01234567, 0x89ABCDEF, 0x00000000, 0xFFFFFFFF ] )
     # The RAM submodule which simulates re-writable data storage.
     # (512 bytes of RAM = 128 words)
     self.ram = RAM( 128 )
@@ -33,14 +33,20 @@ class CPU( Elaboratable ):
     m.submodules.rom = self.rom
     m.submodules.ram = self.ram
 
+    # Intermediate instruction storage.
+    instr = Signal( 32, reset = 0x00000000 )
+
     # r31 is hard-wired to 0.
     m.d.comb += self.r[ 31 ].eq( 0x00000000 )
+    # Hard-wire the program counter to the simulated ROM address.
+    m.d.comb += self.rom.addr.eq( self.pc )
 
     # Main CPU FSM.
     with m.FSM() as fsm:
-      # TODO: "Load PC": Fetch the memory location in the program counter
+      # "Load PC": Fetch the memory location in the program counter
       #            from ROM, to prepare for decoding.
       with m.State( "CPU_PC_LOAD" ):
+        m.d.sync += instr.eq( self.rom.out )
         m.next = "CPU_PC_DECODE"
       # TODO: "Decode PC": Figure out what sort of instruction to execute,
       #              and prepare associated registers.
