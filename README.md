@@ -1,4 +1,4 @@
-# Simple nMigen ALU
+# Simple nMigen CPU
 
 This is a work-in-progress nMigen implementation of the educational CPU which is used in MIT's edX 6004.2x free online course.
 
@@ -21,7 +21,7 @@ The .2x course covers the design of a more complete SoC, which I'm trying to imp
 
 # Usage
 
-You'll need to install the [nMigen library](https://github.com/m-labs/nmigen/) with Python 3.x to run the ALU tests. You can either install it from the repository's source code, or use pip:
+You'll need to install the [nMigen library](https://github.com/m-labs/nmigen/) with Python 3.x to run the testbenches. You can either install it from the repository's source code, or use pip:
 
     pip3 install nmigen nmigen-boards
 
@@ -29,4 +29,4 @@ You can run test suites for individual components by running the corresponding P
 
     python3 alu.py
 
-The result waveforms are saved in a `.vcd` file with the same name as the `.py` file.
+The result waveforms are saved in a `.vcd` file with the same name as the `.py` file. The CPU module also runs all of its submodule's testbenches.
