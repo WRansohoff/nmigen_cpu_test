@@ -181,8 +181,8 @@ def hexs( h ):
   else:
     return "0x%08X"%( ( h + ( 1 << 32 ) ) % ( 1 << 32 ) )
 
-# Perform an individual ALU functional test.
-def alu_ft( alu, a, b, fn, expected ):
+# Perform an individual ALU unit test.
+def alu_ut( alu, a, b, fn, expected ):
   global p, f
   # Set A, B, F.
   yield alu.a.eq( a )
@@ -196,12 +196,12 @@ def alu_ft( alu, a, b, fn, expected ):
   yield Tick()
   # Done. Check the result after combinational logic settles.
   yield Settle()
-  act = yield alu.y
-  if expected != act:
+  actual = yield alu.y
+  if expected != actual:
     f += 1
     print( "\033[31mFAIL:\033[0m %s %s %s = %s (got: %s)"
            %( hexs( a ), fn[ 1 ], hexs( b ),
-              hexs( expected ), hexs( act ) ) )
+              hexs( expected ), hexs( actual ) ) )
   else:
     p += 1
     print( "\033[32mPASS:\033[0m %s %s %s = %s"
@@ -233,123 +233,123 @@ def alu_test( alu ):
 
   # Test the bitwise 'AND' operation.
   print( "AND (&) tests:" )
-  yield from alu_ft( alu, 0xCCCCCCCC, 0xCCCC0000, C_AND, 0xCCCC0000 )
-  yield from alu_ft( alu, 0x00000000, 0x00000000, C_AND, 0x00000000 )
-  yield from alu_ft( alu, 0xFFFFFFFF, 0xFFFFFFFF, C_AND, 0xFFFFFFFF )
-  yield from alu_ft( alu, 0x00000000, 0xFFFFFFFF, C_AND, 0x00000000 )
-  yield from alu_ft( alu, 0xFFFFFFFF, 0x00000000, C_AND, 0x00000000 )
+  yield from alu_ut( alu, 0xCCCCCCCC, 0xCCCC0000, C_AND, 0xCCCC0000 )
+  yield from alu_ut( alu, 0x00000000, 0x00000000, C_AND, 0x00000000 )
+  yield from alu_ut( alu, 0xFFFFFFFF, 0xFFFFFFFF, C_AND, 0xFFFFFFFF )
+  yield from alu_ut( alu, 0x00000000, 0xFFFFFFFF, C_AND, 0x00000000 )
+  yield from alu_ut( alu, 0xFFFFFFFF, 0x00000000, C_AND, 0x00000000 )
 
   # Test the bitwise 'OR' operation.
   print( "OR  (|) tests:" )
-  yield from alu_ft( alu, 0xCCCCCCCC, 0xCCCC0000, C_OR, 0xCCCCCCCC )
-  yield from alu_ft( alu, 0x00000000, 0x00000000, C_OR, 0x00000000 )
-  yield from alu_ft( alu, 0xFFFFFFFF, 0xFFFFFFFF, C_OR, 0xFFFFFFFF )
-  yield from alu_ft( alu, 0x00000000, 0xFFFFFFFF, C_OR, 0xFFFFFFFF )
-  yield from alu_ft( alu, 0xFFFFFFFF, 0x00000000, C_OR, 0xFFFFFFFF )
+  yield from alu_ut( alu, 0xCCCCCCCC, 0xCCCC0000, C_OR, 0xCCCCCCCC )
+  yield from alu_ut( alu, 0x00000000, 0x00000000, C_OR, 0x00000000 )
+  yield from alu_ut( alu, 0xFFFFFFFF, 0xFFFFFFFF, C_OR, 0xFFFFFFFF )
+  yield from alu_ut( alu, 0x00000000, 0xFFFFFFFF, C_OR, 0xFFFFFFFF )
+  yield from alu_ut( alu, 0xFFFFFFFF, 0x00000000, C_OR, 0xFFFFFFFF )
 
   # Test the bitwise 'XOR' operation.
   print( "XOR (^) tests:" )
-  yield from alu_ft( alu, 0xCCCCCCCC, 0xCCCC0000, C_XOR, 0x0000CCCC )
-  yield from alu_ft( alu, 0x00000000, 0x00000000, C_XOR, 0x00000000 )
-  yield from alu_ft( alu, 0xFFFFFFFF, 0xFFFFFFFF, C_XOR, 0x00000000 )
-  yield from alu_ft( alu, 0x00000000, 0xFFFFFFFF, C_XOR, 0xFFFFFFFF )
-  yield from alu_ft( alu, 0xFFFFFFFF, 0x00000000, C_XOR, 0xFFFFFFFF )
+  yield from alu_ut( alu, 0xCCCCCCCC, 0xCCCC0000, C_XOR, 0x0000CCCC )
+  yield from alu_ut( alu, 0x00000000, 0x00000000, C_XOR, 0x00000000 )
+  yield from alu_ut( alu, 0xFFFFFFFF, 0xFFFFFFFF, C_XOR, 0x00000000 )
+  yield from alu_ut( alu, 0x00000000, 0xFFFFFFFF, C_XOR, 0xFFFFFFFF )
+  yield from alu_ut( alu, 0xFFFFFFFF, 0x00000000, C_XOR, 0xFFFFFFFF )
 
   # Test the 'Y = A' operation.
   print( "A   (=) tests:" )
-  yield from alu_ft( alu, 0xCCCCCCCC, 0xCCCC0000, C_A, 0xCCCCCCCC )
-  yield from alu_ft( alu, 0x00000000, 0x00000000, C_A, 0x00000000 )
-  yield from alu_ft( alu, 0xFFFFFFFF, 0xFFFFFFFF, C_A, 0xFFFFFFFF )
-  yield from alu_ft( alu, 0x00000000, 0xFFFFFFFF, C_A, 0x00000000 )
-  yield from alu_ft( alu, 0xFFFFFFFF, 0x00000000, C_A, 0xFFFFFFFF )
+  yield from alu_ut( alu, 0xCCCCCCCC, 0xCCCC0000, C_A, 0xCCCCCCCC )
+  yield from alu_ut( alu, 0x00000000, 0x00000000, C_A, 0x00000000 )
+  yield from alu_ut( alu, 0xFFFFFFFF, 0xFFFFFFFF, C_A, 0xFFFFFFFF )
+  yield from alu_ut( alu, 0x00000000, 0xFFFFFFFF, C_A, 0x00000000 )
+  yield from alu_ut( alu, 0xFFFFFFFF, 0x00000000, C_A, 0xFFFFFFFF )
 
   # Test the addition operation.
   print( "ADD (+) tests:" )
-  yield from alu_ft( alu, 0, 0, C_ADD, 0 )
+  yield from alu_ut( alu, 0, 0, C_ADD, 0 )
   yield from check_nzv( alu, 0, 1, 0 )
-  yield from alu_ft( alu, 0, 1, C_ADD, 1 )
+  yield from alu_ut( alu, 0, 1, C_ADD, 1 )
   yield from check_nzv( alu, 0, 0, 0 )
-  yield from alu_ft( alu, 1, 0, C_ADD, 1 )
+  yield from alu_ut( alu, 1, 0, C_ADD, 1 )
   yield from check_nzv( alu, 0, 0, 0 )
-  yield from alu_ft( alu, 0xFFFFFFFF, 1, C_ADD, 0 )
+  yield from alu_ut( alu, 0xFFFFFFFF, 1, C_ADD, 0 )
   yield from check_nzv( alu, 0, 1, 0 )
-  yield from alu_ft( alu, 29, 71, C_ADD, 100 )
+  yield from alu_ut( alu, 29, 71, C_ADD, 100 )
   yield from check_nzv( alu, 0, 0, 0 )
-  yield from alu_ft( alu, 0x80000000, 0x80000000, C_ADD, 0 )
+  yield from alu_ut( alu, 0x80000000, 0x80000000, C_ADD, 0 )
   yield from check_nzv( alu, 0, 1, 1 )
-  yield from alu_ft( alu, 0x7FFFFFFF, 0x7FFFFFFF, C_ADD, 0xFFFFFFFE )
+  yield from alu_ut( alu, 0x7FFFFFFF, 0x7FFFFFFF, C_ADD, 0xFFFFFFFE )
   yield from check_nzv( alu, 1, 0, 1 )
 
   # Test the subtraction operation.
   print( "SUB (-) tests:" )
-  yield from alu_ft( alu, 0, 0, C_SUB, 0 )
+  yield from alu_ut( alu, 0, 0, C_SUB, 0 )
   yield from check_nzv( alu, 0, 1, 0 )
-  yield from alu_ft( alu, 0, 1, C_SUB, 0xFFFFFFFF )
+  yield from alu_ut( alu, 0, 1, C_SUB, 0xFFFFFFFF )
   yield from check_nzv( alu, 1, 0, 0 )
-  yield from alu_ft( alu, 1, 0, C_SUB, 1 )
+  yield from alu_ut( alu, 1, 0, C_SUB, 1 )
   yield from check_nzv( alu, 0, 0, 0 )
-  yield from alu_ft( alu, -1, 1, C_SUB, 0xFFFFFFFE )
+  yield from alu_ut( alu, -1, 1, C_SUB, 0xFFFFFFFE )
   yield from check_nzv( alu, 1, 0, 0 )
-  yield from alu_ft( alu, -1, -1, C_SUB, 0 )
+  yield from alu_ut( alu, -1, -1, C_SUB, 0 )
   yield from check_nzv( alu, 0, 1, 0 )
-  yield from alu_ft( alu, 0x7FFFFFFF, 0x80000000, C_SUB, 0xFFFFFFFF )
+  yield from alu_ut( alu, 0x7FFFFFFF, 0x80000000, C_SUB, 0xFFFFFFFF )
   yield from check_nzv( alu, 1, 0, 1 )
-  yield from alu_ft( alu, 0x80000000, 0x7FFFFFFF, C_SUB, 1 )
+  yield from alu_ut( alu, 0x80000000, 0x7FFFFFFF, C_SUB, 1 )
   yield from check_nzv( alu, 0, 0, 1 )
 
   # Test the '==' comparison operation.
   print( "CMP (==) tests:" )
-  yield from alu_ft( alu, 0, 0, C_CEQ, 1 )
-  yield from alu_ft( alu, 1, 0, C_CEQ, 0 )
-  yield from alu_ft( alu, 0, 1, C_CEQ, 0 )
-  yield from alu_ft( alu, 42, 42, C_CEQ, 1 )
-  yield from alu_ft( alu, -42, -42, C_CEQ, 1 )
-  yield from alu_ft( alu, 42, -42, C_CEQ, 0 )
+  yield from alu_ut( alu, 0, 0, C_CEQ, 1 )
+  yield from alu_ut( alu, 1, 0, C_CEQ, 0 )
+  yield from alu_ut( alu, 0, 1, C_CEQ, 0 )
+  yield from alu_ut( alu, 42, 42, C_CEQ, 1 )
+  yield from alu_ut( alu, -42, -42, C_CEQ, 1 )
+  yield from alu_ut( alu, 42, -42, C_CEQ, 0 )
 
   # Test the '<' comparison operation.
   print( "CMP (<) tests:" )
-  yield from alu_ft( alu, 0, 0, C_CLT, 0 )
-  yield from alu_ft( alu, 1, 0, C_CLT, 0 )
-  yield from alu_ft( alu, 0, 1, C_CLT, 1 )
-  yield from alu_ft( alu, -1, 0, C_CLT, 1 )
-  yield from alu_ft( alu, -42, -10, C_CLT, 1 )
-  yield from alu_ft( alu, -10, -42, C_CLT, 0 )
+  yield from alu_ut( alu, 0, 0, C_CLT, 0 )
+  yield from alu_ut( alu, 1, 0, C_CLT, 0 )
+  yield from alu_ut( alu, 0, 1, C_CLT, 1 )
+  yield from alu_ut( alu, -1, 0, C_CLT, 1 )
+  yield from alu_ut( alu, -42, -10, C_CLT, 1 )
+  yield from alu_ut( alu, -10, -42, C_CLT, 0 )
 
   # Test the '<=' comparison operation.
   print( "CMP (<=) tests:" )
-  yield from alu_ft( alu, 0, 0, C_CLE, 1 )
-  yield from alu_ft( alu, 1, 0, C_CLE, 0 )
-  yield from alu_ft( alu, 0, 1, C_CLE, 1 )
-  yield from alu_ft( alu, -1, 0, C_CLE, 1 )
-  yield from alu_ft( alu, -42, -10, C_CLE, 1 )
-  yield from alu_ft( alu, -10, -42, C_CLE, 0 )
-  yield from alu_ft( alu, -42, -42, C_CLE, 1 )
+  yield from alu_ut( alu, 0, 0, C_CLE, 1 )
+  yield from alu_ut( alu, 1, 0, C_CLE, 0 )
+  yield from alu_ut( alu, 0, 1, C_CLE, 1 )
+  yield from alu_ut( alu, -1, 0, C_CLE, 1 )
+  yield from alu_ut( alu, -42, -10, C_CLE, 1 )
+  yield from alu_ut( alu, -10, -42, C_CLE, 0 )
+  yield from alu_ut( alu, -42, -42, C_CLE, 1 )
 
   # Test the shift left operation.
   print ( "SHL (<<) tests:" )
-  yield from alu_ft( alu, 0x00000001, 0, C_SHL, 0x00000001 )
-  yield from alu_ft( alu, 0x00000001, 1, C_SHL, 0x00000002 )
-  yield from alu_ft( alu, 0x00000001, 4, C_SHL, 0x00000010 )
-  yield from alu_ft( alu, 0x00000010, 4, C_SHL, 0x00000100 )
-  yield from alu_ft( alu, 0x80000000, 1, C_SHL, 0x00000000 )
+  yield from alu_ut( alu, 0x00000001, 0, C_SHL, 0x00000001 )
+  yield from alu_ut( alu, 0x00000001, 1, C_SHL, 0x00000002 )
+  yield from alu_ut( alu, 0x00000001, 4, C_SHL, 0x00000010 )
+  yield from alu_ut( alu, 0x00000010, 4, C_SHL, 0x00000100 )
+  yield from alu_ut( alu, 0x80000000, 1, C_SHL, 0x00000000 )
 
   # Test the shift right operation.
   print ( "SHR (>>) tests:" )
-  yield from alu_ft( alu, 0x00000001, 0, C_SHR, 0x00000001 )
-  yield from alu_ft( alu, 0x00000001, 1, C_SHR, 0x00000000 )
-  yield from alu_ft( alu, 0x00000011, 1, C_SHR, 0x00000008 )
-  yield from alu_ft( alu, 0x00000010, 1, C_SHR, 0x00000008 )
-  yield from alu_ft( alu, 0x80000000, 1, C_SHR, 0x40000000 )
-  yield from alu_ft( alu, 0x80000000, 4, C_SHR, 0x08000000 )
+  yield from alu_ut( alu, 0x00000001, 0, C_SHR, 0x00000001 )
+  yield from alu_ut( alu, 0x00000001, 1, C_SHR, 0x00000000 )
+  yield from alu_ut( alu, 0x00000011, 1, C_SHR, 0x00000008 )
+  yield from alu_ut( alu, 0x00000010, 1, C_SHR, 0x00000008 )
+  yield from alu_ut( alu, 0x80000000, 1, C_SHR, 0x40000000 )
+  yield from alu_ut( alu, 0x80000000, 4, C_SHR, 0x08000000 )
 
   # Test the shift right with sign extension operation.
   print ( "SRA (>> + sign extend) tests:" )
-  yield from alu_ft( alu, 0x00000001, 0, C_SRA, 0x00000001 )
-  yield from alu_ft( alu, 0x00000001, 1, C_SRA, 0x00000000 )
-  yield from alu_ft( alu, 0x00000011, 1, C_SRA, 0x00000008 )
-  yield from alu_ft( alu, 0x00000010, 1, C_SRA, 0x00000008 )
-  yield from alu_ft( alu, 0x80000000, 1, C_SRA, 0xC0000000 )
-  yield from alu_ft( alu, 0x80000000, 4, C_SRA, 0xF8000000 )
+  yield from alu_ut( alu, 0x00000001, 0, C_SRA, 0x00000001 )
+  yield from alu_ut( alu, 0x00000001, 1, C_SRA, 0x00000000 )
+  yield from alu_ut( alu, 0x00000011, 1, C_SRA, 0x00000008 )
+  yield from alu_ut( alu, 0x00000010, 1, C_SRA, 0x00000008 )
+  yield from alu_ut( alu, 0x80000000, 1, C_SRA, 0xC0000000 )
+  yield from alu_ut( alu, 0x80000000, 4, C_SRA, 0xF8000000 )
 
   # Done.
   yield Tick()
