@@ -16,14 +16,17 @@ class CPU( Elaboratable ):
       Signal( 32, reset = 0x00000000, name = "r%d"%i )
       for i in range( 32 )
     ]
-    # The ALU which performs logical operations.
+    # The ALU submodule which performs logical operations.
     self.alu = ALU()
+    # The ROM submodule which acts as simulated program data storage.
+    self.rom = ROM( [ 0x00000000 ] )
 
   def elaborate( self, platform ):
     # Core CPU module.
     m = Module()
-    # The ALU which performs logical operations.
+    # Register the ALU and ROM submodules.
     m.submodules.alu = self.alu
+    m.submodules.rom = self.rom
 
     # r31 is hard-wired to 0.
     m.d.comb += self.r[ 31 ].eq( 0x00000000 )
