@@ -12,7 +12,10 @@ class CPU( Elaboratable ):
     # Program Counter register.
     self.pc = Signal( 32, reset = 0x00000000 )
     # The main 32 CPU registers.
-    self.r  = [ Signal( 32, reset = 0x00000000 ) for _ in range( 32 ) ]
+    self.r  = [
+      Signal( 32, reset = 0x00000000, name = "r%d"%i )
+      for i in range( 32 )
+    ]
     # The ALU which performs logical operations.
     self.alu = ALU()
 
