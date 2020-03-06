@@ -44,11 +44,43 @@ class ROM( Elaboratable ):
 p = 0
 f = 0
 
+# Perform an individual ROM unit test.
+def rom_read_ut( rom, address, expected ):
+  global p, f
+  # Set address, and wait one tick.
+  yield rom.addr.eq( address )
+  yield Tick()
+  # Done. Check the result after combinational logic settles.
+  yield Settle()
+  actual = yield rom.out
+  if expected != actual:
+    f += 1
+    print( "\033[31mFAIL:\033[0m ROM[ 0x%08X ] = 0x%08X (got: 0x%08X)"
+           %( address, expected, actual ) )
+  else:
+    p += 1
+    print( "\033[32mPASS:\033[0m ROM[ 0x%08X ] = 0x%08X"
+           %( address, expected ) )
+
+# Top-level ROM test method.
 def rom_test( rom ):
   global p, f
 
+  # Let signals settle after reset.
+  yield Settle()
+
   # Print a test header.
   print( "--- ROM Tests ---" )
+
+  # Test the ROM's "happy path" (reading valid data).
+  yield from rom_read_ut( rom, 0x0, ( yield rom.data[ 0 ] ) )
+  yield from rom_read_ut( rom, 0x4, ( yield rom.data[ 1 ] ) )
+  yield from rom_read_ut( rom, 0x8, ( yield rom.data[ 2 ] ) )
+  yield from rom_read_ut( rom, 0xC, ( yield rom.data[ 3 ] ) )
+  # Test mis-aligned addresses.
+  yield from rom_read_ut( rom, 0x1, 0 )
+  yield from rom_read_ut( rom, 0x2, 0 )
+  yield from rom_read_ut( rom, 0x3, 0 )
 
   yield Tick()
   yield Tick()
