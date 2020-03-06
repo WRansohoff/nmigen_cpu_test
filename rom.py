@@ -37,11 +37,16 @@ class ROM( Elaboratable ):
 ##################
 # ROM testbench: #
 ##################
+# Keep track of test pass / fail rates.
+p = 0
+f = 0
 
 def rom_test( rom ):
+  global p, f
   yield Tick()
   yield Tick()
   yield Tick()
+  return p, f
 
 # 'main' method to run a basic testbench.
 if __name__ == "__main__":

@@ -173,6 +173,9 @@ class ALU( Elaboratable ):
 ##################
 # ALU testbench: #
 ##################
+# Keep track of test pass / fail rates.
+p = 0
+f = 0
 
 # Helper method to pretty-print a 2s-complement 32-bit hex string.
 def hexs( h ):
@@ -183,6 +186,7 @@ def hexs( h ):
 
 # Perform an individual ALU functional test.
 def alu_ft( alu, a, b, fn, expected ):
+  global p, f
   # Set A, B, F.
   yield alu.a.eq( a )
   yield alu.b.eq( b )
@@ -196,22 +200,27 @@ def alu_ft( alu, a, b, fn, expected ):
   yield Settle()
   act = yield alu.y
   if expected != act:
+    f += 1
     print( "\033[31mFAIL:\033[0m %s %s %s = %s (got: %s)"
            %( hexs( a ), fn[ 1 ], hexs( b ),
               hexs( expected ), hexs( act ) ) )
   else:
+    p += 1
     print( "\033[32mPASS:\033[0m %s %s %s = %s"
            %( hexs( a ), fn[ 1 ], hexs( b ), hexs( expected ) ) )
 
 # Helper method to verify that 'N', 'Z', 'V' flags are set correctly.
 def check_nzv( alu, n, z, v ):
+  global p, f
   an = yield alu.n
   az = yield alu.z
   av = yield alu.v
   if ( an == n ) and ( az == z ) and ( av == v ):
+    p += 1
     print( "\033[32m  PASS:\033[0m N, Z, V flags: %d, %d, %d"
            %( n, z, v ) )
   else:
+    f += 1
     print( "\033[31m  FAIL:\033[0m N, Z, V flags: " \
            "%d, %d, %d (got: %d, %d, %d)"
            %( n, z, v, an, az, av ) )
@@ -343,6 +352,7 @@ def alu_test( alu ):
 
   # Done.
   yield Tick()
+  return p, f
 
 # 'main' method to run a basic testbench.
 if __name__ == "__main__":
