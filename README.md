@@ -1,8 +1,8 @@
 # Simple nMigen ALU
 
-This is an nMigen implementation of the educational CPU which is used in MIT's edX 6004.2x free online course.
+This is a work-in-progress nMigen implementation of the educational CPU which is used in MIT's edX 6004.2x free online course.
 
-I wanted to brush up on digital logic since it's been a few years since college and I want to design a minimal implementation of the RISC-V ISA in nMigen. So I figured I'd follow along with some online classes using nMigen alongside the provided simulators as a learning exercise.
+I've been brushing up on digital logic since it's been a few years since college and I want to design a minimal implementation of the RISC-V ISA without going crawling back to Verilog or VHDL. So I figured I'd follow along with some online classes using nMigen alongside the provided simulators as a learning exercise.
 
 The 6004.1X and 6004.2X courses are archived, but you can still watch the lectures and see the example problems here:
 
@@ -15,9 +15,9 @@ And you can do the lab assignments here, even though they are no longer availabl
 
 ["Computation Structures" course website](https://computationstructures.org/)
 
-The .1x course mostly covers the background of how digital circuit design works at a high level, but the last few modules cover basic pipelining and describes a simple ALU.
+The .1x course mostly covers the background of how digital circuit design works at a high level, but the last few modules cover basic pipelining and describes a [simple ALU.](https://github.com/WRansohoff/nmigen_alu_test)
 
-The .2x course looks like it covers the design of a more complete SoC (which is implemented here). It uses an educational RISC ISA which the course calls the "Beta ISA".
+The .2x course covers the design of a more complete SoC, which I'm trying to implement here. It uses an educational RISC ISA, and the edX course has named it the "Beta processor".
 
 # Usage
 
