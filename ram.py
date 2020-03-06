@@ -57,15 +57,84 @@ class RAM( Elaboratable ):
 p = 0
 f = 0
 
+# Perform an individual RAM write unit test.
+def ram_write_ut( ram, address, data, success ):
+  global p, f
+  # Set addres, 'din', and 'wen' signals.
+  yield ram.addr.eq( address )
+  yield ram.din.eq( data )
+  yield ram.wen.eq( 1 )
+  # Wait one tick, and un-set the 'wen' bit.
+  yield Tick()
+  yield ram.wen.eq( 0 )
+  # Done. Check that the 'din' word was successfully set in RAM.
+  yield Settle()
+  actual = yield ram.data[ address // 4 ]
+  if success:
+    if data != actual:
+      f += 1
+      print( "\033[31mFAIL:\033[0m RAM[ 0x%08X ]  = "
+             "0x%08X (got: 0x%08X)"
+             %( address, data, actual ) )
+    else:
+      p += 1
+      print( "\033[32mPASS:\033[0m RAM[ 0x%08X ]  = 0x%08X"
+             %( address, data ) )
+  else:
+    if data != actual:
+      p += 1
+      print( "\033[32mPASS:\033[0m RAM[ 0x%08X ] != 0x%08X"
+             %( address, data ) )
+    else:
+      f += 1
+      print( "\033[31mFAIL:\033[0m RAM[ 0x%08X ] != "
+             "0x%08X (got: 0x%08X)"
+             %( address, data, actual ) )
+
+# Perform an inidividual RAM read unit test.
+def ram_read_ut( ram, address, expected ):
+  global p, f
+  # Set address and 'ren' bit.
+  yield ram.addr.eq( address )
+  yield ram.ren.eq( 1 )
+  # Wait one tick, and un-set the 'ren' bit.
+  yield Tick()
+  yield ram.ren.eq( 0 )
+  # Done. Check the 'dout' result after combinational logic settles.
+  yield Settle()
+  actual = yield ram.dout
+  if expected != actual:
+    f += 1
+    print( "\033[31mFAIL:\033[0m RAM[ 0x%08X ] == "
+           "0x%08X (got: 0x%08X)"
+           %( address, expected, actual ) )
+  else:
+    p += 1
+    print( "\033[32mPASS:\033[0m RAM[ 0x%08X ] == 0x%08X"
+           %( address, expected ) )
+
+# Top-level RAM test method.
 def ram_test( ram ):
   global p, f
 
   # Print a test header.
   print( "--- RAM Tests ---" )
 
-  yield Tick()
-  yield Tick()
-  yield Tick()
+  # Test writing data to RAM.
+  yield from ram_write_ut( ram, 0x00, 0x01234567, 1 )
+  yield from ram_write_ut( ram, 0x0C, 0x89ABCDEF, 1 )
+  # Test reading data back out of RAM.
+  yield from ram_read_ut( ram, 0x00, 0x01234567 )
+  yield from ram_read_ut( ram, 0x04, 0x00000000 )
+  yield from ram_read_ut( ram, 0x0C, 0x89ABCDEF )
+  # Test mis-aligned writes.
+  yield from ram_write_ut( ram, 0x01, 0xDEADBEEF, 0 )
+  yield from ram_write_ut( ram, 0x02, 0xDEADBEEF, 0 )
+  yield from ram_write_ut( ram, 0x03, 0xDEADBEEF, 0 )
+  # Test mis-aligned reads.
+  yield from ram_read_ut( ram, 0x01, 0 )
+  yield from ram_read_ut( ram, 0x02, 0 )
+  yield from ram_read_ut( ram, 0x03, 0 )
 
   # Done.
   yield Tick()

@@ -82,10 +82,6 @@ def rom_test( rom ):
   yield from rom_read_ut( rom, 0x2, 0 )
   yield from rom_read_ut( rom, 0x3, 0 )
 
-  yield Tick()
-  yield Tick()
-  yield Tick()
-
   # Done.
   yield Tick()
   print( "ROM Tests: %d Passed, %d Failed"%( p, f ) )
