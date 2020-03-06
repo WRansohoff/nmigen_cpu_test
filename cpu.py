@@ -36,6 +36,36 @@ class CPU( Elaboratable ):
     # r31 is hard-wired to 0.
     m.d.comb += self.r[ 31 ].eq( 0x00000000 )
 
+    # Main CPU FSM.
+    with m.FSM() as fsm:
+      # TODO: "Load PC": Fetch the memory location in the program counter
+      #            from ROM, to prepare for decoding.
+      with m.State( "CPU_PC_LOAD" ):
+        m.next = "CPU_PC_DECODE"
+      # TODO: "Decode PC": Figure out what sort of instruction to execute,
+      #              and prepare associated registers.
+      with m.State( "CPU_PC_DECODE" ):
+        m.next = "CPU_PC_INCR"
+      # TODO: "ALU Load": Send a boolean / logical / arithmetic
+      #                 operation to the ALU.
+      with m.State( "CPU_ALU_LOAD" ):
+        m.next = "CPU_ALU_STORE"
+      # TODO: "ALU Store": Store an ALU result in the requested register.
+      with m.State( "CPU_ALU_STORE" ):
+        m.next = "CPU_PC_INCR"
+      # TODO: "Branch or Jump": Perform a branch or jump operation,
+      #                   including conditional checks if necessary.
+      with m.State( "CPU_JMP" ):
+        m.next = "CPU_PC_LOAD"
+      # TODO: "Load or Store": Read ROM or read/write RAM data.
+      with m.State( "CPU_LS" ):
+        m.next = "CPU_PC_INCR"
+      # "Increment PC": Increment the program counter by one word.
+      with m.State( "CPU_PC_INCR" ):
+        m.d.sync += self.pc.eq( self.pc + 4 )
+        m.next = "CPU_PC_LOAD"
+    
+
     # Dummy synchronous logic step so the test simulation works.
     # This performs a preset ALU operation, then loads the result
     # into R0 followed by R1. If you look at the waveform, it takes
