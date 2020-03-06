@@ -43,10 +43,17 @@ f = 0
 
 def rom_test( rom ):
   global p, f
+
+  # Print a test header.
+  print( "--- ROM Tests ---" )
+
   yield Tick()
   yield Tick()
   yield Tick()
-  return p, f
+
+  # Done.
+  yield Tick()
+  print( "ROM Tests: %d Passed, %d Failed"%( p, f ) )
 
 # 'main' method to run a basic testbench.
 if __name__ == "__main__":

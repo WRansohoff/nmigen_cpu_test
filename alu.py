@@ -193,8 +193,9 @@ def alu_ft( alu, a, b, fn, expected ):
   yield alu.f.eq( fn[ 0 ] )
   # Set 'start'
   yield alu.start.eq( 1 )
-  # Wait two ticks.
+  # Wait two ticks, clearing 'start' after one tick.
   yield Tick()
+  yield alu.start.eq( 0 )
   yield Tick()
   # Done. Check the result after combinational logic settles.
   yield Settle()
@@ -229,6 +230,9 @@ def check_nzv( alu, n, z, v ):
 def alu_test( alu ):
   # Let signals settle after reset.
   yield Settle()
+
+  # Print a test header.
+  print( "--- ALU Tests ---" )
 
   # Test the bitwise 'AND' operation.
   print( "AND (&) tests:" )
@@ -352,7 +356,7 @@ def alu_test( alu ):
 
   # Done.
   yield Tick()
-  return p, f
+  print( "ALU Tests: %d Passed, %d Failed"%( p, f ) )
 
 # 'main' method to run a basic testbench.
 if __name__ == "__main__":

@@ -1,6 +1,5 @@
 from nmigen import *
 from nmigen.back.pysim import *
-
 from alu import *
 from rom import *
 from ram import *
@@ -63,12 +62,18 @@ f = 0
 # Dummy test method (TODO: tests)
 def cpu_test( cpu ):
   global p, f
+
+  # Print a test header.
+  print( "--- CPU Tests ---" )
+
   yield Tick()
   yield Tick()
   yield Tick()
   yield Tick()
+
+  # Done.
   yield Tick()
-  return p, f
+  print( "CPU Tests: %d Passed, %d Failed"%( p, f ) )
 
 # 'main' method to run a basic testbench.
 if __name__ == "__main__":
@@ -78,18 +83,12 @@ if __name__ == "__main__":
   # Run the CPU tests.
   with Simulator( dut, vcd_file = open( 'cpu.vcd', 'w' ) ) as sim:
     def proc():
-      print( "--- ALU Tests ---" )
-      p, f = yield from alu_test( dut.alu )
-      print( "ALU Tests: %d Passed, %d Failed"%( p, f ) )
-      print( "--- ROM Tests ---" )
-      p, f = yield from rom_test( dut.rom )
-      print( "ROM Tests: %d Passed, %d Failed"%( p, f ) )
-      print( "--- RAM Tests ---" )
-      p, f = yield from ram_test( dut.ram )
-      print( "RAM Tests: %d Passed, %d Failed"%( p, f ) )
-      print( "--- CPU Tests ---" )
-      p, f = yield from cpu_test( dut )
-      print( "CPU Tests: %d Passed, %d Failed"%( p, f ) )
+      # Run submodule tests.
+      yield from alu_test( dut.alu )
+      yield from rom_test( dut.rom )
+      yield from ram_test( dut.ram )
+      # Run CPU tests.
+      yield from cpu_test( dut )
     sim.add_clock( 24e-6 )
     sim.add_sync_process( proc )
     sim.run()

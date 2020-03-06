@@ -59,10 +59,17 @@ f = 0
 
 def ram_test( ram ):
   global p, f
+
+  # Print a test header.
+  print( "--- RAM Tests ---" )
+
   yield Tick()
   yield Tick()
   yield Tick()
-  return p, f
+
+  # Done.
+  yield Tick()
+  print( "RAM Tests: %d Passed, %d Failed"%( p, f ) )
 
 # 'main' method to run a basic testbench.
 if __name__ == "__main__":
