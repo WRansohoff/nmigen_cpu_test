@@ -155,10 +155,18 @@ class CPU( Elaboratable ):
           # TODO: Load/Store logic.
           m.next = "CPU_LS"
         # Branch/Jump ops: JMP, BEQ, BNE.
-        with m.Elif( ( opcode == OP_JMP[ 0 ] ) |
-                     ( opcode == OP_BEQ[ 0 ] ) |
+        # JMP "Jump" operation: Place the next PC value in Rc, then
+        # set PC to (Ra & 0xFFFFFFFC) to ensure it is word-aligned.
+        with m.Elif( opcode == OP_JMP[ 0 ] ):
+          for i in range( 30 ):
+            with m.If( rc == i ):
+              m.d.sync += self.r[ i ].eq( self.pc + 4 )
+            with m.If( ra == i ):
+              m.d.sync += self.pc.eq( self.r[ i ] & 0xFFFFFFFC )
+          m.next = "CPU_PC_LOAD"
+        # TODO: BEQ / BNE "Branch" operations.
+        with m.Elif( ( opcode == OP_BEQ[ 0 ] ) |
                      ( opcode == OP_BNE[ 0 ] ) ):
-          # TODO: Branch/Jump logic.
           m.next = "CPU_JMP"
         # ALU instructions: ADD, AND, OR, XOR, XNOR, SUB, MUL, DIV,
         #                   SHL, SHR, SRA, CMPEQ, CMPLE, CMPLT.
@@ -228,10 +236,12 @@ def cpu_run( cpu, ticks ):
 if __name__ == "__main__":
   # Create a simulated ROM module with a dummy program.
   rom = ROM( [
-    # ADD tests.
+    # ADDC, ADD
     0xC0001234, 0x80200000,
-    # Dummy data.
-    0x01234567, 0x89ABCDEF, 0x00000000, 0xFFFFFFFF
+    # JMP
+    0x6C680000,
+    # Dummy data (should not be reached).
+    0x01234567, 0x89ABCDEF, 0xDEADBEEF, 0xFFFFFFFF, 0xFFFFFFFF
   ] )
   # Instantiate the CPU module.
   dut = CPU( rom )
@@ -240,7 +250,7 @@ if __name__ == "__main__":
   with Simulator( dut, vcd_file = open( 'cpu.vcd', 'w' ) ) as sim:
     def proc():
       # Run CPU tests.
-      sim_ticks = 50
+      sim_ticks = 250
       yield from cpu_run( dut, sim_ticks )
     sim.add_clock( 24e-6 )
     sim.add_sync_process( proc )
