@@ -27,7 +27,7 @@ class ROM( Elaboratable ):
     with m.If( ( self.addr & 0b11 ) != 0 ):
       m.d.sync += self.out.eq( 0 )
     # Set the 'output' value to 0 if it is out of bounds.
-    with m.Elif( self.addr > ( self.size * 4 ) ):
+    with m.Elif( self.addr >= ( self.size * 4 ) ):
       m.d.sync += self.out.eq( 0 )
     # Set the 'output' value to the requested 'data' array index.
     for i in range( self.size ):

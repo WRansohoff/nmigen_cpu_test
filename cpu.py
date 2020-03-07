@@ -81,7 +81,7 @@ OP_XNORC  = [ 0b111011, "XNORC" ]
 ###############
 
 class CPU( Elaboratable ):
-  def __init__( self ):
+  def __init__( self, rom_module ):
     # Program Counter register.
     self.pc = Signal( 32, reset = 0x00000000 )
     # Exception Pointer register.
@@ -94,9 +94,7 @@ class CPU( Elaboratable ):
     # The ALU submodule which performs logical operations.
     self.alu = ALU()
     # The ROM submodule which acts as simulated program data storage.
-    self.rom = ROM( [ 0xC0001234, 0x80200000, 0x01234567, 0x89ABCDEF,
-                      0x00000000, 0xFFFFFFFF, 0x00000000, 0x00000000 ]
-                  )
+    self.rom = rom
     # The RAM submodule which simulates re-writable data storage.
     # (512 bytes of RAM = 128 words)
     self.ram = RAM( 128 )
@@ -228,8 +226,15 @@ def cpu_run( cpu, ticks ):
 
 # 'main' method to run a basic testbench.
 if __name__ == "__main__":
+  # Create a simulated ROM module with a dummy program.
+  rom = ROM( [
+    # ADD tests.
+    0xC0001234, 0x80200000,
+    # Dummy data.
+    0x01234567, 0x89ABCDEF, 0x00000000, 0xFFFFFFFF
+  ] )
   # Instantiate the CPU module.
-  dut = CPU()
+  dut = CPU( rom )
 
   # Run the CPU tests.
   with Simulator( dut, vcd_file = open( 'cpu.vcd', 'w' ) ) as sim:
