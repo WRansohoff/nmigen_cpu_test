@@ -29,4 +29,6 @@ You can run test suites for individual components by running the corresponding P
 
     python3 alu.py
 
-The result waveforms are saved in a `.vcd` file with the same name as the `.py` file. The CPU module also runs all of its submodule's testbenches.
+The result waveforms are saved in a `.vcd` file with the same name as the `.py` file.
+
+I haven't written tests for the actual CPU module yet; instead, the `cpu.py` file simulates the CPU's execution for a period of time given the ROM module's initial values. Only the `ADD` and `ADDC` operations work right now, so I haven't put much thought into how to encode program data for execution.

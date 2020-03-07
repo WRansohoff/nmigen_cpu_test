@@ -10,7 +10,7 @@ class ROM( Elaboratable ):
     # Address bits to select up to `len( data )` words by byte.
     self.addr = Signal( range( len( data * 4 ) ), reset = 0 )
     # Data word output.
-    self.out  = Signal( 32, reset = 0x00000000 )
+    self.out  = Signal( 32, reset = data[ 0 ] )
     # Data storage.
     self.data = [
       Signal( 32, reset = data[ i ], name = "rom(0x%08X)"%( i * 4 ) )
