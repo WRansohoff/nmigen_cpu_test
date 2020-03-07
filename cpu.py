@@ -116,9 +116,9 @@ class CPU( Elaboratable ):
     imm_signex = Signal( 32, reset = 0x00000000 )
 
     # r31 is hard-wired to 0.
-    m.d.comb += self.r[ 31 ].eq( 0x00000000 )
+    self.r[ 31 ].eq( 0x00000000 )
     # r30 is the exception pointer.
-    m.d.comb += self.r[ 30 ].eq( self.xp )
+    self.r[ 30 ].eq( self.xp )
     # Hard-wire the program counter to the simulated ROM address.
     m.d.comb += self.rom.addr.eq( self.pc )
     # Set the ALU's 'start' bit to 0 by default.
@@ -158,7 +158,7 @@ class CPU( Elaboratable ):
         # JMP "Jump" operation: Place the next PC value in Rc, then
         # set PC to (Ra & 0xFFFFFFFC) to ensure it is word-aligned.
         with m.Elif( opcode == OP_JMP[ 0 ] ):
-          for i in range( 30 ):
+          for i in range( 32 ):
             with m.If( rc == i ):
               m.d.sync += self.r[ i ].eq( self.pc + 4 )
             with m.If( ra == i ):
@@ -174,7 +174,7 @@ class CPU( Elaboratable ):
         # ADD operation:
         with m.Elif( ( opcode == OP_ADD[ 0 ] ) ):
           m.d.sync += self.alu.f.eq( 0b010000 )
-          for i in range( 30 ):
+          for i in range( 32 ):
             with m.If( ra == i ):
               m.d.sync += self.alu.a.eq( self.r[ i ] )
             with m.If( rb == i ):
@@ -186,7 +186,26 @@ class CPU( Elaboratable ):
             self.alu.f.eq( 0b010000 ),
             self.alu.b.eq( imm )
           ]
-          for i in range( 30 ):
+          for i in range( 32 ):
+            with m.If( ra == i ):
+              m.d.sync += self.alu.a.eq( self.r[ i ] )
+          m.next = "CPU_ALU_IN"
+        # AND operation:
+        with m.Elif( ( opcode == OP_AND[ 0 ] ) ):
+          m.d.sync += self.alu.f.eq( 0b101000 )
+          for i in range( 32 ):
+            with m.If( ra == i ):
+              m.d.sync += self.alu.a.eq( self.r[ i ] )
+            with m.If( rb == i ):
+              m.d.sync += self.alu.b.eq( self.r[ i ] )
+          m.next = "CPU_ALU_IN"
+        # ANDC operation:
+        with m.Elif( ( opcode == OP_ANDC[ 0 ] ) ):
+          m.d.sync += [
+            self.alu.f.eq( 0b101000 ),
+            self.alu.b.eq( imm )
+          ]
+          for i in range( 32 ):
             with m.If( ra == i ):
               m.d.sync += self.alu.a.eq( self.r[ i ] )
           m.next = "CPU_ALU_IN"
@@ -236,10 +255,12 @@ def cpu_run( cpu, ticks ):
 if __name__ == "__main__":
   # Create a simulated ROM module with a dummy program.
   rom = ROM( [
-    # ADDC, ADD
-    0xC0001234, 0x80200000,
-    # JMP
-    0x6C680000,
+    # ADDC, ADD (expect r0 = 0x00001234, r1 = 0x00002468)
+    0xC01F1234, 0x80200000,
+    # ANDC, AND (expect r2 = r3 = 0x00001200)
+    0xE0401200, 0xA0601000,
+    # JMP (rc = r28, ra = r29)
+    0x6F9D0000,
     # Dummy data (should not be reached).
     0x01234567, 0x89ABCDEF, 0xDEADBEEF, 0xFFFFFFFF, 0xFFFFFFFF
   ] )
