@@ -47,7 +47,7 @@ OP_AND    = [ 0b101000, "AND" ]
 OP_ANDC   = [ 0b111000, "ANDC" ]
 OP_BEQ    = [ 0b011100, "BEQ" ]
 OP_BNE    = [ 0b011101, "BNE" ]
-OP_CMPEQ  = [ 0b110100, "CMPEQ" ]
+OP_CMPEQ  = [ 0b100100, "CMPEQ" ]
 OP_CMPEQC = [ 0b110100, "CMPEQC" ]
 OP_CMPLE  = [ 0b100110, "CMPLE" ]
 OP_CMPLEC = [ 0b110110, "CMPLEC" ]
@@ -209,6 +209,25 @@ class CPU( Elaboratable ):
             with m.If( ra == i ):
               m.d.sync += self.alu.a.eq( self.r[ i ] )
           m.next = "CPU_ALU_IN"
+        # CMPEQ operation:
+        with m.Elif( ( opcode == OP_CMPEQ[ 0 ] ) ):
+          m.d.sync += self.alu.f.eq( 0b000011 )
+          for i in range( 32 ):
+            with m.If( ra == i ):
+              m.d.sync += self.alu.a.eq( self.r[ i ] )
+            with m.If( rb == i ):
+              m.d.sync += self.alu.b.eq( self.r[ i ] )
+          m.next = "CPU_ALU_IN"
+        # CMPEQC operation:
+        with m.Elif( ( opcode == OP_CMPEQC[ 0 ] ) ):
+          m.d.sync += [
+            self.alu.f.eq( 0b000011 ),
+            self.alu.b.eq( imm )
+          ]
+          for i in range( 32 ):
+            with m.If( ra == i ):
+              m.d.sync += self.alu.a.eq( self.r[ i ] )
+          m.next = "CPU_ALU_IN"
         # Go back to incrementing the PC on an unrecognized opcode.
         # TODO: error state?
         with m.Else():
@@ -259,6 +278,8 @@ if __name__ == "__main__":
     0xC01F1234, 0x80200000,
     # ANDC, AND (expect r2 = r3 = 0x00001200)
     0xE0401200, 0xA0601000,
+    # CMPEQC, CMPEQ (expect r4 = 1, 0, 1, 0)
+    0xD0801234, 0xD0804321, 0x90821800, 0x90801800,
     # JMP (rc = r28, ra = r29)
     0x6F9D0000,
     # Dummy data (should not be reached).
