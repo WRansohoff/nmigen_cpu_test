@@ -7,17 +7,16 @@ from nmigen.back.pysim import *
 
 # ALU definitions: [ bitcode, string ]
 C_AND = [ 0b101000, "&" ]
-C_OR  = [ 0b101110, "|" ]
-C_XOR = [ 0b100110, "^" ]
-C_A   = [ 0b101010, "=" ]
-C_ADD = [ 0b010000, "+" ]
-C_SUB = [ 0b010001, "-" ]
-C_CEQ = [ 0b000011, "==" ]
-C_CLT = [ 0b000101, "<" ]
-C_CLE = [ 0b000111, "<=" ]
-C_SHL = [ 0b110000, "<<" ]
-C_SHR = [ 0b110001, ">>" ]
-C_SRA = [ 0b110011, ">>" ]
+C_OR  = [ 0b101001, "|" ]
+C_XOR = [ 0b101010, "^" ]
+C_ADD = [ 0b100000, "+" ]
+C_SUB = [ 0b100001, "-" ]
+C_CEQ = [ 0b100100, "==" ]
+C_CLT = [ 0b100101, "<" ]
+C_CLE = [ 0b100110, "<=" ]
+C_SHL = [ 0b101100, "<<" ]
+C_SHR = [ 0b101101, ">>" ]
+C_SRA = [ 0b101110, ">>" ]
 
 class ALU( Elaboratable ):
   def __init__( self ):
@@ -57,12 +56,12 @@ class ALU( Elaboratable ):
     # 'Z' flag is true if the result is zero.
     m.d.comb += self.z.eq( self.y == 0 )
     # 'V' flag is true if an overflow occurred.
-    with m.If( fn.matches( '01---0' ) ):
+    with m.If( fn == C_ADD[ 0 ] ):
       # With addition, overflow occurred if the two input signs are
       # the same and those signs differ from the result's sign.
       m.d.comb += self.v.eq( ( xa[ 31 ] == xb[ 31 ] ) &
                              ( xa[ 31 ] != self.y[ 31 ] ) )
-    with m.Elif( fn.matches( '01---1' ) ):
+    with m.Elif( fn == C_SUB[ 0 ] ):
       # With subtraction, overflow occurred if A and -B have the same
       # sign, and that sign differs from the result's sign.
       m.d.comb += self.v.eq( ( xa[ 31 ] != xb[ 31 ] ) &
@@ -96,47 +95,44 @@ class ALU( Elaboratable ):
         #  - 0b101000: Y = A AND B
         with m.If( fn == C_AND[ 0 ] ):
           m.d.sync += self.y.eq( xa & xb )
-        #  - 0b101110: Y = A  OR B
+        #  - 0b101001: Y = A  OR B
         with m.Elif( fn == C_OR[ 0 ] ):
           m.d.sync += self.y.eq( xa | xb )
-        #  - 0b100110: Y = A XOR B
+        #  - 0b101010: Y = A XOR B
         with m.Elif( fn == C_XOR[ 0 ] ):
           m.d.sync += self.y.eq( xa ^ xb )
-        #  - 0b101010: Y = A
-        with m.Elif( fn == C_A[ 0 ] ):
-          m.d.sync += self.y.eq( xa )
         # Arithmetic unit (F = [...]):
-        #  - 0b01xxx0: Y = A + B
-        with m.Elif( fn.matches( '01---0' ) ):
+        #  - 0b100000: Y = A + B
+        with m.Elif( fn == C_ADD[ 0 ] ):
           m.d.sync += self.y.eq( xa + xb )
-        #  - 0b01xxx1: Y = A - B
-        with m.Elif( fn.matches( '01---1' ) ):
+        #  - 0b100001: Y = A - B
+        with m.Elif( fn == C_SUB[ 0 ] ):
           m.d.sync += self.y.eq( xa - xb )
         # Comparison unit (F = [...]):
-        #  - 0b00x011: Y = ( A == B )
-        with m.Elif( fn.matches( '00-011' ) ):
+        #  - 0b100100: Y = ( A == B )
+        with m.Elif( fn == C_CEQ[ 0 ] ):
           m.d.sync += self.y.eq( xa == xb )
-        #  - 0b00x101: Y = ( A <  B )
-        with m.Elif( fn.matches( '00-101' ) ):
+        #  - 0b100101: Y = ( A <  B )
+        with m.Elif( fn == C_CLT[ 0 ] ):
           # Can't use 'xa < xb' because HW logic doesn't account
           # for negative numbers, i.e. 0xFFFFFFFF > 0x00000000.
           m.d.sync += self.y.eq( ( ( xb - xa ) > 0 ) &
                                  ( ( xb - xa )[ 31 ] == 0 ) )
-        #  - 0b00x111: Y = ( A <= B )
-        with m.Elif( fn.matches( '00-111' ) ):
+        #  - 0b100110: Y = ( A <= B )
+        with m.Elif( fn == C_CLE[ 0 ] ):
           # Same as above; 'xa <= xb' hardware description
           # does not account for negative numbers.
           m.d.sync += self.y.eq( ( ( xb - xa ) >= 0 ) &
                                  ( ( xb - xa )[ 31 ] == 0 ) )
         # Shift unit (F = [...]):
-        #  - 0b11xx00: Y = A << B
-        with m.Elif( fn.matches( '11--00' ) ):
+        #  - 0b101100: Y = A << B
+        with m.Elif( fn == C_SHL[ 0 ] ):
           m.d.sync += self.y.eq( xa << xb )
-        #  - 0b11xx01: Y = A >> B (no sign extend)
-        with m.Elif( fn.matches( '11--01' ) ):
+        #  - 0b101101: Y = A >> B (no sign extend)
+        with m.Elif( fn == C_SHR[ 0 ] ):
           m.d.sync += self.y.eq( xa >> xb )
-        #  - 0b11xx11: Y = A >> B (with sign extend)
-        with m.Elif( fn.matches( '11--11' ) ):
+        #  - 0b101110: Y = A >> B (with sign extend)
+        with m.Elif( fn == C_SRA[ 0 ] ):
           m.d.sync += self.y.eq( ( xa >> xb ) | signex )
           # Calculate sign extension bit with combinational logic.
           with m.If( xa[ 31 ] == 0 ):
@@ -254,14 +250,6 @@ def alu_test( alu ):
   yield from alu_ut( alu, 0xFFFFFFFF, 0xFFFFFFFF, C_XOR, 0x00000000 )
   yield from alu_ut( alu, 0x00000000, 0xFFFFFFFF, C_XOR, 0xFFFFFFFF )
   yield from alu_ut( alu, 0xFFFFFFFF, 0x00000000, C_XOR, 0xFFFFFFFF )
-
-  # Test the 'Y = A' operation.
-  print( "A   (=) tests:" )
-  yield from alu_ut( alu, 0xCCCCCCCC, 0xCCCC0000, C_A, 0xCCCCCCCC )
-  yield from alu_ut( alu, 0x00000000, 0x00000000, C_A, 0x00000000 )
-  yield from alu_ut( alu, 0xFFFFFFFF, 0xFFFFFFFF, C_A, 0xFFFFFFFF )
-  yield from alu_ut( alu, 0x00000000, 0xFFFFFFFF, C_A, 0x00000000 )
-  yield from alu_ut( alu, 0xFFFFFFFF, 0x00000000, C_A, 0xFFFFFFFF )
 
   # Test the addition operation.
   print( "ADD (+) tests:" )

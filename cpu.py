@@ -113,14 +113,7 @@ class CPU( Elaboratable ):
   def alu_reg_op( self, cpu, ra, rb, op ):
     # TODO: Signals are not hashable, so 'ALU_OPS[ op ]' doesn't work
     # I can come up with a better way to handle these signals...
-    with cpu.If( ( op.bit_select( 4, 2 ) == 0b00 ) |
-                 ( op.bit_select( 4, 2 ) == 0b01 ) ):
-      cpu.d.sync += self.alu.f.eq( 0b000000 )
-    for k, v in ALU_OPS.items():
-      with cpu.Elif( op == k ):
-        cpu.d.sync += self.alu.f.eq( v )
-    with cpu.Else():
-      cpu.d.sync += self.alu.f.eq( 0b000000 )
+    cpu.d.sync += self.alu.f.eq( op )
     for i in range( 32 ):
       with cpu.If( ra == i ):
         cpu.d.sync += self.alu.a.eq( self.r[ i ] )
@@ -133,15 +126,10 @@ class CPU( Elaboratable ):
   def alu_imm_op( self, cpu, ra, imm, op ):
     # TODO: Signals are not hashable, so 'ALU_OPS[ op ]' doesn't work
     # I can come up with a better way to handle these signals...
-    with cpu.If( ( op.bit_select( 4, 2 ) == 0b00 ) |
-                 ( op.bit_select( 4, 2 ) == 0b01 ) ):
-      cpu.d.sync += self.alu.f.eq( 0b000000 )
-    for k, v in ALU_OPS.items():
-      with cpu.Elif( op == k ):
-        cpu.d.sync += self.alu.f.eq( v )
-    with cpu.Else():
-      cpu.d.sync += self.alu.f.eq( 0b000000 )
-    cpu.d.sync += self.alu.b.eq( imm )
+    cpu.d.sync += [
+      self.alu.f.eq( op & 0b101111 ),
+      self.alu.b.eq( imm )
+    ]
     for i in range( 32 ):
       with cpu.If( ra == i ):
         cpu.d.sync += self.alu.a.eq( self.r[ i ] )
