@@ -81,7 +81,29 @@ ALU_OPS   = {
   OP_AND[ 0 ]    : C_AND[ 0 ],
   OP_ANDC[ 0 ]   : C_AND[ 0 ],
   OP_CMPEQ[ 0 ]  : C_CEQ[ 0 ],
-  OP_CMPEQC[ 0 ] : C_CEQ[ 0 ]
+  OP_CMPEQC[ 0 ] : C_CEQ[ 0 ],
+  OP_CMPLE[ 0 ]  : C_CLE[ 0 ],
+  OP_CMPLEC[ 0 ] : C_CLE[ 0 ],
+  OP_CMPLT[ 0 ]  : C_CLT[ 0 ],
+  OP_CMPLTC[ 0 ] : C_CLT[ 0 ],
+  OP_DIV[ 0 ]    : C_DIV[ 0 ],
+  OP_DIVC[ 0 ]   : C_DIV[ 0 ],
+  OP_MUL[ 0 ]    : C_MUL[ 0 ],
+  OP_MULC[ 0 ]   : C_MUL[ 0 ],
+  OP_OR[ 0 ]     : C_OR[ 0 ],
+  OP_ORC[ 0 ]    : C_OR[ 0 ],
+  OP_SHL[ 0 ]    : C_SHL[ 0 ],
+  OP_SHLC[ 0 ]   : C_SHL[ 0 ],
+  OP_SHR[ 0 ]    : C_SHR[ 0 ],
+  OP_SHRC[ 0 ]   : C_SHR[ 0 ],
+  OP_SRA[ 0 ]    : C_SRA[ 0 ],
+  OP_SRAC[ 0 ]   : C_SRA[ 0 ],
+  OP_SUB[ 0 ]    : C_SUB[ 0 ],
+  OP_SUBC[ 0 ]   : C_SUB[ 0 ],
+  OP_XOR[ 0 ]    : C_XOR[ 0 ],
+  OP_XORC[ 0 ]   : C_XOR[ 0 ],
+  OP_XNOR[ 0 ]   : C_XNOR[ 0 ],
+  OP_XNORC[ 0 ]  : C_XNOR[ 0 ],
 }
 
 
@@ -264,6 +286,12 @@ if __name__ == "__main__":
     0xE0401200, 0xA0601000,
     # CMPEQC, CMPEQ (expect r4 = 1, 0, 1, 0)
     0xD0801234, 0xD0804321, 0x90821800, 0x90801800,
+    # CMPLEC, CMPLE (expect r4 = 1, 1, 0, 1, 1, 0)
+    0xD8801235, 0xD8801234, 0xD8801233, 0x98800000,
+    0x98810800, 0x98810000,
+    # CMPLTC, CMPLT (expect r4 = 1, 0, 0, 1, 0, 0)
+    0xD4801235, 0xD4801234, 0xD4801233, 0x94800800,
+    0x94810800, 0x94810000,
     # JMP (rc = r28, ra = r29)
     0x6F9D0000,
     # Dummy data (should not be reached).
