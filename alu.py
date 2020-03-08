@@ -6,27 +6,33 @@ from nmigen.back.pysim import *
 ###############
 
 # ALU definitions: [ bitcode, string ]
-C_AND = [ 0b101000, "&" ]
-C_OR  = [ 0b101001, "|" ]
-C_XOR = [ 0b101010, "^" ]
-C_ADD = [ 0b100000, "+" ]
-C_SUB = [ 0b100001, "-" ]
-C_CEQ = [ 0b100100, "==" ]
-C_CLT = [ 0b100101, "<" ]
-C_CLE = [ 0b100110, "<=" ]
-C_SHL = [ 0b101100, "<<" ]
-C_SHR = [ 0b101101, ">>" ]
-C_SRA = [ 0b101110, ">>" ]
+C_AND  = [ 0b101000, "&" ]
+C_OR   = [ 0b101001, "|" ]
+C_XOR  = [ 0b101010, "^" ]
+C_XNOR = [ 0b101011, "!^" ]
+C_ADD  = [ 0b100000, "+" ]
+C_SUB  = [ 0b100001, "-" ]
+C_DIV  = [ 0b100011, "/" ]
+C_MUL  = [ 0b100010, "*" ]
+C_CEQ  = [ 0b100100, "==" ]
+C_CLT  = [ 0b100101, "<" ]
+C_CLE  = [ 0b100110, "<=" ]
+C_SHL  = [ 0b101100, "<<" ]
+C_SHR  = [ 0b101101, ">>" ]
+C_SRA  = [ 0b101110, ">>" ]
 
 class ALU( Elaboratable ):
   def __init__( self ):
     # 'A' and 'B' data inputs.
-    self.a = Signal( 32, reset = 0x00000000 )
-    self.b = Signal( 32, reset = 0x00000000 )
+    self.a = Signal( shape = Shape( width = 32, signed = True ),
+                     reset = 0x00000000 )
+    self.b = Signal( shape = Shape( width = 32, signed = True ),
+                     reset = 0x00000000 )
     # 'F' function select input.
     self.f = Signal( 6,  reset = 0b000000 )
     # 'Y' data output.
-    self.y = Signal( 32, reset = 0x00000000 )
+    self.y = Signal( shape = Shape( width = 32, signed = True ),
+                     reset = 0x00000000 )
     # 'N' arithmetic flag (last result was negative)
     self.n = Signal()
     # 'Z' arithmetic flag (last result == zero)
@@ -43,12 +49,16 @@ class ALU( Elaboratable ):
 
     # Internal 'busy' signal.
     busy = Signal()
-    # Latched input values.
-    xa  = Signal( 32 )
-    xb  = Signal( 32 )
-    fn  = Signal( 6 )
-    # Extra register to hold sign-extension bits.
-    signex = Signal( 32 )
+    # Latched input values for signed and unsigned operations.
+    xa   = Signal( shape = Shape( width = 32, signed = True ) )
+    xb   = Signal( shape = Shape( width = 32, signed = True ) )
+    ua   = Signal( shape = Shape( width = 32, signed = False ) )
+    ub   = Signal( shape = Shape( width = 32, signed = False ) )
+    fn   = Signal( 6 )
+    # Helper registers for signed division.
+    diva = Signal( shape = Shape( width = 32, signed = False ) )
+    divb = Signal( shape = Shape( width = 32, signed = False ) )
+    divs = Signal()
 
     # Combinational N, Z, and V arithmetic flags.
     # 'N' flag is always equal to the most significant result bit.
@@ -68,6 +78,7 @@ class ALU( Elaboratable ):
                              ( xa[ 31 ] != self.y[ 31 ] ) )
     with m.Else():
       # For non-arithmetic operations, set 'V' to 0.
+      # TODO: Should multiplication also set the overflow flag?
       m.d.comb += self.v.eq( 0 )
 
     # Main ALU FSM; two states, "IDLE" and "BUSY".
@@ -79,9 +90,35 @@ class ALU( Elaboratable ):
           m.d.sync += [
             xa.eq( self.a ),
             xb.eq( self.b ),
+            ua.eq( self.a ),
+            ub.eq( self.b ),
             fn.eq( self.f ),
             self.done.eq( 0 )
           ]
+          with m.If( ( self.b < 0 ) & ( self.a < 0 ) ):
+            m.d.sync += [
+              diva.eq( -self.a ),
+              divb.eq( -self.b ),
+              divs.eq( 0 )
+            ]
+          with m.Elif( self.a < 0 ):
+            m.d.sync += [
+              diva.eq( -self.a ),
+              divb.eq( self.b ),
+              divs.eq( 1 )
+            ]
+          with m.Elif( self.b < 0 ):
+            m.d.sync += [
+              diva.eq( self.a ),
+              divb.eq( -self.b ),
+              divs.eq( 1 )
+            ]
+          with m.Else():
+            m.d.sync += [
+              diva.eq( self.a ),
+              divb.eq( self.b ),
+              divs.eq( 0 )
+            ]
           m.next = "ALU_BUSY"
         with m.Else():
           m.d.sync += self.done.eq( 1 )
@@ -101,6 +138,9 @@ class ALU( Elaboratable ):
         #  - 0b101010: Y = A XOR B
         with m.Elif( fn == C_XOR[ 0 ] ):
           m.d.sync += self.y.eq( xa ^ xb )
+        #  - 0b101011: Y = A XNOR B = NOT( A XOR B )
+        with m.Elif( fn == C_XNOR[ 0 ] ):
+          m.d.sync += self.y.eq( ~( xa ^ xb ) )
         # Arithmetic unit (F = [...]):
         #  - 0b100000: Y = A + B
         with m.Elif( fn == C_ADD[ 0 ] ):
@@ -108,6 +148,18 @@ class ALU( Elaboratable ):
         #  - 0b100001: Y = A - B
         with m.Elif( fn == C_SUB[ 0 ] ):
           m.d.sync += self.y.eq( xa - xb )
+        #  - 0b100011: Y = A / B (wow, this is way easier than VHDL!)
+        with m.Elif( fn == C_DIV[ 0 ] ):
+          # (Return 0 if division by 0 occurs)
+          with m.If( xb == 0 ):
+            m.d.sync += self.y.eq( 0 )
+          with m.Elif( divs ):
+            m.d.sync += self.y.eq( ( diva // divb ) * -1 )
+          with m.Else():
+            m.d.sync += self.y.eq( diva // divb )
+        #  - 0b100010: Y = A * B
+        with m.Elif( fn == C_MUL[ 0 ] ):
+          m.d.sync += self.y.eq( xa * xb )
         # Comparison unit (F = [...]):
         #  - 0b100100: Y = ( A == B )
         with m.Elif( fn == C_CEQ[ 0 ] ):
@@ -127,35 +179,13 @@ class ALU( Elaboratable ):
         # Shift unit (F = [...]):
         #  - 0b101100: Y = A << B
         with m.Elif( fn == C_SHL[ 0 ] ):
-          m.d.sync += self.y.eq( xa << xb )
+          m.d.sync += self.y.eq( xa << ub )
         #  - 0b101101: Y = A >> B (no sign extend)
         with m.Elif( fn == C_SHR[ 0 ] ):
-          m.d.sync += self.y.eq( xa >> xb )
+          m.d.sync += self.y.eq( ua >> ub )
         #  - 0b101110: Y = A >> B (with sign extend)
         with m.Elif( fn == C_SRA[ 0 ] ):
-          m.d.sync += self.y.eq( ( xa >> xb ) | signex )
-          # Calculate sign extension bit with combinational logic.
-          with m.If( xa[ 31 ] == 0 ):
-            m.d.comb += signex.eq( 0x00000000 )
-          with m.Else():
-            m.d.comb += signex.eq(
-              ( ( xb > 0 )  << 31 ) | ( ( xb > 1 )  << 30 ) |
-              ( ( xb > 2 )  << 29 ) | ( ( xb > 3 )  << 28 ) |
-              ( ( xb > 4 )  << 27 ) | ( ( xb > 5 )  << 26 ) |
-              ( ( xb > 6 )  << 25 ) | ( ( xb > 7 )  << 24 ) |
-              ( ( xb > 8 )  << 23 ) | ( ( xb > 9 )  << 22 ) |
-              ( ( xb > 10 ) << 21 ) | ( ( xb > 11 ) << 20 ) |
-              ( ( xb > 12 ) << 19 ) | ( ( xb > 13 ) << 18 ) |
-              ( ( xb > 14 ) << 17 ) | ( ( xb > 15 ) << 16 ) |
-              ( ( xb > 16 ) << 15 ) | ( ( xb > 17 ) << 14 ) |
-              ( ( xb > 18 ) << 13 ) | ( ( xb > 19 ) << 12 ) |
-              ( ( xb > 20 ) << 11 ) | ( ( xb > 21 ) << 10 ) |
-              ( ( xb > 22 ) << 9  ) | ( ( xb > 23 ) << 8  ) |
-              ( ( xb > 24 ) << 7  ) | ( ( xb > 25 ) << 6  ) |
-              ( ( xb > 26 ) << 5  ) | ( ( xb > 27 ) << 4  ) |
-              ( ( xb > 28 ) << 3  ) | ( ( xb > 30 ) << 2  ) |
-              ( ( xb > 31 ) << 1  )
-            )
+          m.d.sync += self.y.eq( xa >> ub )
         # Return 0 after one clock cycle for unrecognized commands.
         with m.Else():
           m.d.sync += self.y.eq( 0x00000000 )
@@ -193,7 +223,7 @@ def alu_ut( alu, a, b, fn, expected ):
   # Done. Check the result after combinational logic settles.
   yield Settle()
   actual = yield alu.y
-  if expected != actual:
+  if hexs( expected ) != hexs( actual ):
     f += 1
     print( "\033[31mFAIL:\033[0m %s %s %s = %s (got: %s)"
            %( hexs( a ), fn[ 1 ], hexs( b ),
@@ -251,6 +281,15 @@ def alu_test( alu ):
   yield from alu_ut( alu, 0x00000000, 0xFFFFFFFF, C_XOR, 0xFFFFFFFF )
   yield from alu_ut( alu, 0xFFFFFFFF, 0x00000000, C_XOR, 0xFFFFFFFF )
 
+  # Test the bitwise 'XNOR' operation.
+  print( "XNOR (!^) tests:" )
+  yield from alu_ut( alu, 0xCCCCCCCC, 0xCCCC0000, C_XNOR, 0xFFFF3333 )
+  yield from alu_ut( alu, 0xCCCCCCCC, 0x33330000, C_XNOR, 0x00003333 )
+  yield from alu_ut( alu, 0x00000000, 0x00000000, C_XNOR, 0xFFFFFFFF )
+  yield from alu_ut( alu, 0xFFFFFFFF, 0xFFFFFFFF, C_XNOR, 0xFFFFFFFF )
+  yield from alu_ut( alu, 0x00000000, 0xFFFFFFFF, C_XNOR, 0x00000000 )
+  yield from alu_ut( alu, 0xFFFFFFFF, 0x00000000, C_XNOR, 0x00000000 )
+
   # Test the addition operation.
   print( "ADD (+) tests:" )
   yield from alu_ut( alu, 0, 0, C_ADD, 0 )
@@ -284,6 +323,38 @@ def alu_test( alu ):
   yield from check_nzv( alu, 1, 0, 1 )
   yield from alu_ut( alu, 0x80000000, 0x7FFFFFFF, C_SUB, 1 )
   yield from check_nzv( alu, 0, 0, 1 )
+
+  # Test the division operation.
+  print( "DIV (/) tests:" )
+  yield from alu_ut( alu, 0, 0, C_DIV, 0 )
+  yield from alu_ut( alu, 1, 0, C_DIV, 0 )
+  yield from alu_ut( alu, 1, 1, C_DIV, 1 )
+  yield from alu_ut( alu, 0, 1, C_DIV, 0 )
+  yield from alu_ut( alu, 0, 2, C_DIV, 0 )
+  yield from alu_ut( alu, 1, 2, C_DIV, 0 )
+  yield from alu_ut( alu, 2, 2, C_DIV, 1 )
+  yield from alu_ut( alu, 3, 2, C_DIV, 1 )
+  yield from alu_ut( alu, 4, 2, C_DIV, 2 )
+  yield from alu_ut( alu, 8, 2, C_DIV, 4 )
+  yield from alu_ut( alu, 8, 3, C_DIV, 2 )
+  yield from alu_ut( alu, 42, 2, C_DIV, 21 )
+  yield from alu_ut( alu, -42, 2, C_DIV, -21 )
+  yield from alu_ut( alu, 42, -2, C_DIV, -21 )
+  yield from alu_ut( alu, -42, -2, C_DIV, 21 )
+
+  # Test the multiplication operation.
+  print( "MUL (*) tests:" )
+  yield from alu_ut( alu, 0, 0, C_MUL, 0 )
+  yield from alu_ut( alu, 1, 0, C_MUL, 0 )
+  yield from alu_ut( alu, 0, 1, C_MUL, 0 )
+  yield from alu_ut( alu, 1, 1, C_MUL, 1 )
+  yield from alu_ut( alu, 2, 1, C_MUL, 2 )
+  yield from alu_ut( alu, 2, 2, C_MUL, 4 )
+  yield from alu_ut( alu, 3, 3, C_MUL, 9 )
+  yield from alu_ut( alu, 6, 7, C_MUL, 42 )
+  yield from alu_ut( alu, 6, -7, C_MUL, -42 )
+  yield from alu_ut( alu, -6, 7, C_MUL, -42 )
+  yield from alu_ut( alu, -6, -7, C_MUL, 42 )
 
   # Test the '==' comparison operation.
   print( "CMP (==) tests:" )
