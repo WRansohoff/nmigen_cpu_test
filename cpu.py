@@ -75,6 +75,15 @@ OP_XOR    = [ 0b111010, "XOR" ]
 OP_XORC   = [ 0b111010, "XORC" ]
 OP_XNOR   = [ 0b101011, "XNOR" ]
 OP_XNORC  = [ 0b111011, "XNORC" ]
+ALU_OPS   = {
+  OP_ADD[ 0 ]    : C_ADD[ 0 ],
+  OP_ADDC[ 0 ]   : C_ADD[ 0 ],
+  OP_AND[ 0 ]    : C_AND[ 0 ],
+  OP_ANDC[ 0 ]   : C_AND[ 0 ],
+  OP_CMPEQ[ 0 ]  : C_CEQ[ 0 ],
+  OP_CMPEQC[ 0 ] : C_CEQ[ 0 ]
+}
+
 
 ###############
 # CPU module: #
@@ -98,6 +107,45 @@ class CPU( Elaboratable ):
     # The RAM submodule which simulates re-writable data storage.
     # (512 bytes of RAM = 128 words)
     self.ram = RAM( 128 )
+
+  # Helper method to define shared logic for 'Rc = Ra ? Rb' ALU
+  # operations such as 'ADD', 'AND', 'CMPEQ', etc.
+  def alu_reg_op( self, cpu, ra, rb, op ):
+    # TODO: Signals are not hashable, so 'ALU_OPS[ op ]' doesn't work
+    # I can come up with a better way to handle these signals...
+    with cpu.If( ( op.bit_select( 4, 2 ) == 0b00 ) |
+                 ( op.bit_select( 4, 2 ) == 0b01 ) ):
+      cpu.d.sync += self.alu.f.eq( 0b000000 )
+    for k, v in ALU_OPS.items():
+      with cpu.Elif( op == k ):
+        cpu.d.sync += self.alu.f.eq( v )
+    with cpu.Else():
+      cpu.d.sync += self.alu.f.eq( 0b000000 )
+    for i in range( 32 ):
+      with cpu.If( ra == i ):
+        cpu.d.sync += self.alu.a.eq( self.r[ i ] )
+      with cpu.If( rb == i ):
+        cpu.d.sync += self.alu.b.eq( self.r[ i ] )
+    cpu.next = "CPU_ALU_IN"
+
+  # Helper method to define shared logic for 'Rc = Ra ? Immediate'
+  # ALU operations such as 'ADDC', 'ANDC', 'CMPEQC', etc.
+  def alu_imm_op( self, cpu, ra, imm, op ):
+    # TODO: Signals are not hashable, so 'ALU_OPS[ op ]' doesn't work
+    # I can come up with a better way to handle these signals...
+    with cpu.If( ( op.bit_select( 4, 2 ) == 0b00 ) |
+                 ( op.bit_select( 4, 2 ) == 0b01 ) ):
+      cpu.d.sync += self.alu.f.eq( 0b000000 )
+    for k, v in ALU_OPS.items():
+      with cpu.Elif( op == k ):
+        cpu.d.sync += self.alu.f.eq( v )
+    with cpu.Else():
+      cpu.d.sync += self.alu.f.eq( 0b000000 )
+    cpu.d.sync += self.alu.b.eq( imm )
+    for i in range( 32 ):
+      with cpu.If( ra == i ):
+        cpu.d.sync += self.alu.a.eq( self.r[ i ] )
+    cpu.next = "CPU_ALU_IN"
 
   def elaborate( self, platform ):
     # Core CPU module.
@@ -171,65 +219,13 @@ class CPU( Elaboratable ):
         # ALU instructions: ADD, AND, OR, XOR, XNOR, SUB, MUL, DIV,
         #                   SHL, SHR, SRA, CMPEQ, CMPLE, CMPLT.
         # (And the corresponding operations ending in 'C'.)
-        # ADD operation:
-        with m.Elif( ( opcode == OP_ADD[ 0 ] ) ):
-          m.d.sync += self.alu.f.eq( 0b010000 )
-          for i in range( 32 ):
-            with m.If( ra == i ):
-              m.d.sync += self.alu.a.eq( self.r[ i ] )
-            with m.If( rb == i ):
-              m.d.sync += self.alu.b.eq( self.r[ i ] )
-          m.next = "CPU_ALU_IN"
-        # ADDC operation:
-        with m.Elif( ( opcode == OP_ADDC[ 0 ] ) ):
-          m.d.sync += [
-            self.alu.f.eq( 0b010000 ),
-            self.alu.b.eq( imm )
-          ]
-          for i in range( 32 ):
-            with m.If( ra == i ):
-              m.d.sync += self.alu.a.eq( self.r[ i ] )
-          m.next = "CPU_ALU_IN"
-        # AND operation:
-        with m.Elif( ( opcode == OP_AND[ 0 ] ) ):
-          m.d.sync += self.alu.f.eq( 0b101000 )
-          for i in range( 32 ):
-            with m.If( ra == i ):
-              m.d.sync += self.alu.a.eq( self.r[ i ] )
-            with m.If( rb == i ):
-              m.d.sync += self.alu.b.eq( self.r[ i ] )
-          m.next = "CPU_ALU_IN"
-        # ANDC operation:
-        with m.Elif( ( opcode == OP_ANDC[ 0 ] ) ):
-          m.d.sync += [
-            self.alu.f.eq( 0b101000 ),
-            self.alu.b.eq( imm )
-          ]
-          for i in range( 32 ):
-            with m.If( ra == i ):
-              m.d.sync += self.alu.a.eq( self.r[ i ] )
-          m.next = "CPU_ALU_IN"
-        # CMPEQ operation:
-        with m.Elif( ( opcode == OP_CMPEQ[ 0 ] ) ):
-          m.d.sync += self.alu.f.eq( 0b000011 )
-          for i in range( 32 ):
-            with m.If( ra == i ):
-              m.d.sync += self.alu.a.eq( self.r[ i ] )
-            with m.If( rb == i ):
-              m.d.sync += self.alu.b.eq( self.r[ i ] )
-          m.next = "CPU_ALU_IN"
-        # CMPEQC operation:
-        with m.Elif( ( opcode == OP_CMPEQC[ 0 ] ) ):
-          m.d.sync += [
-            self.alu.f.eq( 0b000011 ),
-            self.alu.b.eq( imm )
-          ]
-          for i in range( 32 ):
-            with m.If( ra == i ):
-              m.d.sync += self.alu.a.eq( self.r[ i ] )
-          m.next = "CPU_ALU_IN"
-        # Go back to incrementing the PC on an unrecognized opcode.
-        # TODO: error state?
+        # 'RC = Ra ? Rb' ALU operations:
+        with m.If( opcode.bit_select( 4, 2 ) == 0b10 ):
+          self.alu_reg_op( m, ra, rb, opcode )
+        # 'RC = Ra ? Constant' ALU operations:
+        with m.Elif( opcode.bit_select( 4, 2 ) == 0b11 ):
+          self.alu_imm_op( m, ra, imm, opcode )
+        # Move on to incrementing the PC for unrecognized operations.
         with m.Else():
           m.next = "CPU_PC_INCR"
       # "ALU Input": Send a boolean / logical / arithmetic
