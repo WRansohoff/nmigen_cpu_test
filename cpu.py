@@ -270,6 +270,53 @@ class CPU( Elaboratable ):
 # CPU testbench: #
 ##################
 
+# Helper methods to generate machine code for individual instructions.
+# CPU Register Operation: Rc = Ra ? Rb
+def CPU_OP( op, c, a, b ):
+  return ( ( op << 26 ) |
+           ( ( c & 0x1F ) << 21 ) |
+           ( ( a & 0x1F ) << 16 ) |
+           ( ( b & 0x1F ) << 11 ) )
+
+# CPU Immediate Operation: Rc = Ra ? Constant
+# (This format also covers Branch, Jump, Load and Store operations.)
+def CPU_OPC( op, c, a, i ):
+  return ( ( op << 26 ) |
+           ( ( c & 0x1F ) << 21 ) |
+           ( ( a & 0x1F ) << 16 ) |
+           ( i & 0xFFFF ) )
+
+# TODO: I bet there's a way to define these methods procedurally.
+# Addition ops: ADDC, ADD (? = +)
+def ADDC( c, a, i ):
+  return ( CPU_OPC( OP_ADDC[ 0 ], c, a, i ) )
+def ADD( c, a, b ):
+  return ( CPU_OP( OP_ADD[ 0 ], c, a, b ) )
+# Bitwise 'and' ops: ANDC, AND (? = &)
+def ANDC( c, a, i ):
+  return ( CPU_OPC( OP_ANDC[ 0 ], c, a, i ) )
+def AND( c, a, b ):
+  return ( CPU_OP( OP_AND[ 0 ], c, a, b ) )
+# Comparison 'a equals b?' ops: CMPEQC, CMPEQ (? = ==)
+def CMPEQC( c, a, i ):
+  return ( CPU_OPC( OP_CMPEQC[ 0 ], c, a, i ) )
+def CMPEQ( c, a, b ):
+  return ( CPU_OP( OP_CMPEQ[ 0 ], c, a, b ) )
+# Comparison 'a lesser or equal to b?' ops: CMPLEC, CMPLE (? = <=)
+def CMPLEC( c, a, i ):
+  return ( CPU_OPC( OP_CMPLEC[ 0 ], c, a, i ) )
+def CMPLE( c, a, b ):
+  return ( CPU_OP( OP_CMPLE[ 0 ], c, a, b ) )
+# Comparison 'a less than b?' ops: CMPLTC, CMPLT (? = <)
+def CMPLTC( c, a, i ):
+  return ( CPU_OPC( OP_CMPLTC[ 0 ], c, a, i ) )
+def CMPLT( c, a, b ):
+  return ( CPU_OP( OP_CMPLT[ 0 ], c, a, b ) )
+# Uncondigional jump op: JMP (Stores current PC in Rc, jumps to Ra.)
+def JMP( c, a ):
+  return ( CPU_OPC( OP_JMP[ 0 ], c, a, 0x0000 ) )
+
+
 # Dummy test method to let the CPU run (TODO: tests)
 def cpu_run( cpu, ticks ):
   # Let the CPU run for N ticks.
@@ -281,19 +328,22 @@ if __name__ == "__main__":
   # Create a simulated ROM module with a dummy program.
   rom = ROM( [
     # ADDC, ADD (expect r0 = 0x00001234, r1 = 0x00002468)
-    0xC01F1234, 0x80200000,
+    ADDC( 0, 0, 0x1234 ), ADD( 1, 0, 0 ),
     # ANDC, AND (expect r2 = r3 = 0x00001200)
-    0xE0401200, 0xA0601000,
+    ANDC( 2, 0, 0x1200 ), AND( 3, 2, 0 ),
     # CMPEQC, CMPEQ (expect r4 = 1, 0, 1, 0)
-    0xD0801234, 0xD0804321, 0x90821800, 0x90801800,
+    CMPEQC( 4, 0, 0x1234 ), CMPEQC( 4, 0, 0x4321 ),
+    CMPEQ( 4, 2, 3 ), CMPEQ( 4, 0, 3 ),
     # CMPLEC, CMPLE (expect r4 = 1, 1, 0, 1, 1, 0)
-    0xD8801235, 0xD8801234, 0xD8801233, 0x98800000,
-    0x98810800, 0x98810000,
+    CMPLEC( 4, 0, 0x1235 ), CMPLEC( 4, 0, 0x1234 ),
+    CMPLEC( 4, 0, 0x1233 ), CMPLE( 4, 0, 1 ),
+    CMPLE( 4, 0, 0 ), CMPLE( 4, 1, 0 ),
     # CMPLTC, CMPLT (expect r4 = 1, 0, 0, 1, 0, 0)
-    0xD4801235, 0xD4801234, 0xD4801233, 0x94800800,
-    0x94810800, 0x94810000,
+    CMPLTC( 4, 0, 0x1235 ), CMPLTC( 4, 0, 0x1234 ),
+    CMPLTC( 4, 0, 0x1233 ), CMPLT( 4, 0, 1 ),
+    CMPLT( 4, 0, 0 ), CMPLT( 4, 1, 0 ),
     # JMP (rc = r28, ra = r29)
-    0x6F9D0000,
+    JMP( 28, 29 ),
     # Dummy data (should not be reached).
     0x01234567, 0x89ABCDEF, 0xDEADBEEF, 0xFFFFFFFF, 0xFFFFFFFF
   ] )
