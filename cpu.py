@@ -312,10 +312,19 @@ def CMPLTC( c, a, i ):
   return ( CPU_OPC( OP_CMPLTC[ 0 ], c, a, i ) )
 def CMPLT( c, a, b ):
   return ( CPU_OP( OP_CMPLT[ 0 ], c, a, b ) )
+# Division ops: DIVC, DIV (? = //)
+def DIVC( c, a, i ):
+  return ( CPU_OPC( OP_DIVC[ 0 ], c, a, i ) )
+def DIV( c, a, b ):
+  return ( CPU_OP( OP_DIV[ 0 ], c, a, b ) )
 # Uncondigional jump op: JMP (Stores current PC in Rc, jumps to Ra.)
 def JMP( c, a ):
   return ( CPU_OPC( OP_JMP[ 0 ], c, a, 0x0000 ) )
-
+# Multiplication ops: MULC, MUL (? = *)
+def MULC( c, a, i ):
+  return ( CPU_OPC( OP_MULC[ 0 ], c, a, i ) )
+def MUL( c, a, b ):
+  return ( CPU_OP( OP_MUL[ 0 ], c, a, b ) )
 
 # Dummy test method to let the CPU run (TODO: tests)
 def cpu_run( cpu, ticks ):
@@ -331,6 +340,10 @@ if __name__ == "__main__":
     ADDC( 0, 0, 0x1234 ), ADD( 1, 0, 0 ),
     # ANDC, AND (expect r2 = r3 = 0x00001200)
     ANDC( 2, 0, 0x1200 ), AND( 3, 2, 0 ),
+    # DIVC, DIV (expect r5 = 0x00001234, r6 = 0x00000002)
+    DIVC( 5, 1, 0x0002 ), DIV( 6, 1, 5 ),
+    # MULC, MUL (expect r7 = 0x0000002A = 42, r8 = 0x000006E4 = 1764)
+    MULC( 7, 6, 21 ), MUL( 8, 7, 7 ),
     # CMPEQC, CMPEQ (expect r4 = 1, 0, 1, 0)
     CMPEQC( 4, 0, 0x1234 ), CMPEQC( 4, 0, 0x4321 ),
     CMPEQ( 4, 2, 3 ), CMPEQ( 4, 0, 3 ),
