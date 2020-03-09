@@ -320,11 +320,48 @@ def DIV( c, a, b ):
 # Uncondigional jump op: JMP (Stores current PC in Rc, jumps to Ra.)
 def JMP( c, a ):
   return ( CPU_OPC( OP_JMP[ 0 ], c, a, 0x0000 ) )
+# TODO: Load ops: LD, LDR
 # Multiplication ops: MULC, MUL (? = *)
 def MULC( c, a, i ):
   return ( CPU_OPC( OP_MULC[ 0 ], c, a, i ) )
 def MUL( c, a, b ):
   return ( CPU_OP( OP_MUL[ 0 ], c, a, b ) )
+# Bitwise 'or' ops: ORC, OR (? = |)
+def ORC( c, a, i ):
+  return ( CPU_OPC( OP_ORC[ 0 ], c, a, i ) )
+def OR( c, a, b ):
+  return ( CPU_OP( OP_OR[ 0 ], c, a, b ) )
+# Left shift ops: SHLC, SHL (? = <<)
+def SHLC( c, a, i ):
+  return ( CPU_OPC( OP_SHLC[ 0 ], c, a, i ) )
+def SHL( c, a, b ):
+  return ( CPU_OP( OP_SHL[ 0 ], c, a, b ) )
+# Right shift ops: SHRC, SHR (? = >>)
+def SHRC( c, a, i ):
+  return ( CPU_OPC( OP_SHRC[ 0 ], c, a, i ) )
+def SHR( c, a, b ):
+  return ( CPU_OP( OP_SHR[ 0 ], c, a, b ) )
+# Right shift with sign extension ops: SRAC, SRA (? = >>)
+def SRAC( c, a, i ):
+  return ( CPU_OPC( OP_SRAC[ 0 ], c, a, i ) )
+def SRA( c, a, b ):
+  return ( CPU_OP( OP_SRA[ 0 ], c, a, b ) )
+# Subtraction ops: MULC, MUL (? = -)
+def SUBC( c, a, i ):
+  return ( CPU_OPC( OP_SUBC[ 0 ], c, a, i ) )
+def SUB( c, a, b ):
+  return ( CPU_OP( OP_SUB[ 0 ], c, a, b ) )
+# TODO: Store op: ST
+# Bitwise 'xor' ops: XORC, XOR (? = ^)
+def XORC( c, a, i ):
+  return ( CPU_OPC( OP_XORC[ 0 ], c, a, i ) )
+def XOR( c, a, b ):
+  return ( CPU_OP( OP_XOR[ 0 ], c, a, b ) )
+# Bitwise 'xnor' ops: XNORC, XNOR (? = !^)
+def XNORC( c, a, i ):
+  return ( CPU_OPC( OP_XNORC[ 0 ], c, a, i ) )
+def XNOR( c, a, b ):
+  return ( CPU_OP( OP_XNOR[ 0 ], c, a, b ) )
 
 # Dummy test method to let the CPU run (TODO: tests)
 def cpu_run( cpu, ticks ):
@@ -355,6 +392,20 @@ if __name__ == "__main__":
     CMPLTC( 4, 0, 0x1235 ), CMPLTC( 4, 0, 0x1234 ),
     CMPLTC( 4, 0, 0x1233 ), CMPLT( 4, 0, 1 ),
     CMPLT( 4, 0, 0 ), CMPLT( 4, 1, 0 ),
+    # ORC, OR (expect r9 = 0x00005674, r10 = 0x0000567E)
+    ORC( 9, 5, 0x4444 ), OR( 10, 9, 7 ),
+    # SHLC, SHL (expect r11 = 0x12340000, r12 = 0x000159D0)
+    SHLC( 11, 0, 16 ), SHL( 12, 9, 6 ),
+    # SHRC, SHR (expect r13 = 0x00123400, r14 = 0x00048D00)
+    SHRC( 13, 11, 8 ), SHR( 14, 13, 6 ),
+    # SUBC, SUB (expect r15 = 0xFFFF8003, r16 = 0x00001234)
+    SUBC( 15, 6, 0x7FFF ), SUB( 16, 1, 0 ),
+    # SRAC, SRA (expect r17 = 0xFFFFFFFF, r18 = 0xFFFFE000)
+    SRAC( 17, 15, 16 ), SRAC( 18, 15, 6 ),
+    # XORC, XOR (expect r19 = 0xFFFF96F0, r20 = 0x000067FF)
+    XORC( 19, 0, 0x84C4 ), XOR( 20, 17, 19 ),
+    # XNORC, XNOR (expect r21 = 0xFFEDD9CB, r22 = 0x000067FF)
+    XNORC( 21, 13, 0x1234 ), XNOR( 22, 17, 20 ),
     # JMP (rc = r28, ra = r29)
     JMP( 28, 29 ),
     # Dummy data (should not be reached).
@@ -367,7 +418,7 @@ if __name__ == "__main__":
   with Simulator( dut, vcd_file = open( 'cpu.vcd', 'w' ) ) as sim:
     def proc():
       # Run CPU tests.
-      sim_ticks = 250
+      sim_ticks = 300
       yield from cpu_run( dut, sim_ticks )
     sim.add_clock( 24e-6 )
     sim.add_sync_process( proc )
