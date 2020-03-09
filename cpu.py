@@ -213,7 +213,7 @@ class CPU( Elaboratable ):
           # TODO: Load/Store logic.
           m.next = "CPU_LS"
         # Branch/Jump ops: JMP, BEQ, BNE.
-        # JMP "Jump" operation: Place the next PC value in Rc, then
+        # JMP "JuMP" operation: Place the next PC value in Rc, then
         # set PC to (Ra & 0xFFFFFFFC) to ensure it is word-aligned.
         with m.Elif( opcode == OP_JMP[ 0 ] ):
           for i in range( 32 ):
@@ -222,15 +222,35 @@ class CPU( Elaboratable ):
             with m.If( ra == i ):
               m.d.sync += self.pc.eq( self.r[ i ] & 0xFFFFFFFC )
           m.next = "CPU_PC_LOAD"
-        # TODO: BEQ / BNE "Branch" operations.
-        with m.Elif( ( opcode == OP_BEQ[ 0 ] ) |
-                     ( opcode == OP_BNE[ 0 ] ) ):
-          m.next = "CPU_JMP"
+        # BEQ "Branch if EQual" operation: Place the next PC value in
+        # Rc, then jump to (next PC + immediate) if Ra == 0.
+        with m.Elif( opcode == OP_BEQ[ 0 ] ):
+          for i in range( 32 ):
+            with m.If( rc == i ):
+              m.d.sync += self.r[ i ].eq( self.pc + 4 )
+            with m.If( ra == i ):
+              with m.If( self.r[ i ] ):
+                m.next = "CPU_PC_INCR"
+              with m.Else():
+                m.d.sync += self.pc.eq( self.pc + ( imm * 4 ) + 4 )
+                m.next = "CPU_PC_LOAD"
+        # BNE "Branch if Not Equal" operation: Same as BEQ, but
+        # perform the jump if Ra != 0 instead.
+        with m.Elif( opcode == OP_BNE[ 0 ] ):
+          for i in range( 32 ):
+            with m.If( rc == i ):
+              m.d.sync += self.r[ i ].eq( self.pc + 4 )
+            with m.If( ra == i ):
+              with m.If( self.r[ i ] ):
+                m.d.sync += self.pc.eq( self.pc + ( imm * 4 ) + 4 )
+                m.next = "CPU_PC_LOAD"
+              with m.Else():
+                m.next = "CPU_PC_INCR"
         # ALU instructions: ADD, AND, OR, XOR, XNOR, SUB, MUL, DIV,
         #                   SHL, SHR, SRA, CMPEQ, CMPLE, CMPLT.
         # (And the corresponding operations ending in 'C'.)
         # 'RC = Ra ? Rb' ALU operations:
-        with m.If( opcode.bit_select( 4, 2 ) == 0b10 ):
+        with m.Elif( opcode.bit_select( 4, 2 ) == 0b10 ):
           self.alu_reg_op( m, ra, rb, opcode )
         # 'RC = Ra ? Constant' ALU operations:
         with m.Elif( opcode.bit_select( 4, 2 ) == 0b11 ):
@@ -251,10 +271,6 @@ class CPU( Elaboratable ):
           with m.If( rc == i ):
             m.d.sync += self.r[ i ].eq( self.alu.y )
         m.next = "CPU_PC_INCR"
-      # TODO: "Branch or Jump": Perform a branch or jump operation,
-      #                   including conditional checks if necessary.
-      with m.State( "CPU_JMP" ):
-        m.next = "CPU_PC_LOAD"
       # TODO: "Load or Store": Read ROM or read/write RAM data.
       with m.State( "CPU_LS" ):
         m.next = "CPU_PC_INCR"
@@ -297,6 +313,11 @@ def ANDC( c, a, i ):
   return ( CPU_OPC( OP_ANDC[ 0 ], c, a, i ) )
 def AND( c, a, b ):
   return ( CPU_OP( OP_AND[ 0 ], c, a, b ) )
+# Branch ops: BEQ, BNE (? = ==, !=)
+def BEQ( c, a, i ):
+  return ( CPU_OPC( OP_BEQ[ 0 ], c, a, i ) )
+def BNE( c, a, i ):
+  return ( CPU_OPC( OP_BNE[ 0 ], c, a, i ) )
 # Comparison 'a equals b?' ops: CMPEQC, CMPEQ (? = ==)
 def CMPEQC( c, a, i ):
   return ( CPU_OPC( OP_CMPEQC[ 0 ], c, a, i ) )
@@ -375,6 +396,13 @@ if __name__ == "__main__":
   rom = ROM( [
     # ADDC, ADD (expect r0 = 0x00001234, r1 = 0x00002468)
     ADDC( 0, 0, 0x1234 ), ADD( 1, 0, 0 ),
+    # BNE (expect r27 = 0x0C, PC skips over the following dummy data)
+    BNE( 27, 0, 0x0004 ),
+    0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF,
+    # BEQ (expect r26 = 0x20, PC skips over the following dummy data)
+    BEQ( 26, 22, 0x0002 ), 0xDEADBEEF, 0xDEADBEEF,
+    # BEQ, BNE (expect r25 = 0x2C, r24 = 0x30, but no branching.)
+    BEQ( 25, 0, 0xFFFF ), BNE( 24, 22, 0xFFFF ),
     # ANDC, AND (expect r2 = r3 = 0x00001200)
     ANDC( 2, 0, 0x1200 ), AND( 3, 2, 0 ),
     # DIVC, DIV (expect r5 = 0x00001234, r6 = 0x00000002)
@@ -406,7 +434,7 @@ if __name__ == "__main__":
     XORC( 19, 0, 0x84C4 ), XOR( 20, 17, 19 ),
     # XNORC, XNOR (expect r21 = 0xFFEDD9CB, r22 = 0x000067FF)
     XNORC( 21, 13, 0x1234 ), XNOR( 22, 17, 20 ),
-    # JMP (rc = r28, ra = r29)
+    # JMP (rc = r28, ra = r29, PC returns to 0x00000000)
     JMP( 28, 29 ),
     # Dummy data (should not be reached).
     0x01234567, 0x89ABCDEF, 0xDEADBEEF, 0xFFFFFFFF, 0xFFFFFFFF
