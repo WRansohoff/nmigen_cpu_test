@@ -108,3 +108,101 @@ ALU_OPS   = {
   OP_XNOR[ 0 ]   : C_XNOR[ 0 ],
   OP_XNORC[ 0 ]  : C_XNOR[ 0 ],
 }
+
+# Helper methods to generate machine code for individual instructions.
+# CPU Register Operation: Rc = Ra ? Rb
+def CPU_OP( op, c, a, b ):
+  return ( ( op << 26 ) |
+           ( ( c & 0x1F ) << 21 ) |
+           ( ( a & 0x1F ) << 16 ) |
+           ( ( b & 0x1F ) << 11 ) )
+
+# CPU Immediate Operation: Rc = Ra ? Constant
+# (This format also covers Branch, Jump, Load and Store operations.)
+def CPU_OPC( op, c, a, i ):
+  return ( ( op << 26 ) |
+           ( ( c & 0x1F ) << 21 ) |
+           ( ( a & 0x1F ) << 16 ) |
+           ( i & 0xFFFF ) )
+
+# TODO: I bet there's a way to define these methods procedurally.
+# Addition ops: ADDC, ADD (? = +)
+def ADDC( c, a, i ):
+  return ( CPU_OPC( OP_ADDC[ 0 ], c, a, i ) )
+def ADD( c, a, b ):
+  return ( CPU_OP( OP_ADD[ 0 ], c, a, b ) )
+# Bitwise 'and' ops: ANDC, AND (? = &)
+def ANDC( c, a, i ):
+  return ( CPU_OPC( OP_ANDC[ 0 ], c, a, i ) )
+def AND( c, a, b ):
+  return ( CPU_OP( OP_AND[ 0 ], c, a, b ) )
+# Branch ops: BEQ, BNE (? = ==, !=)
+def BEQ( c, a, i ):
+  return ( CPU_OPC( OP_BEQ[ 0 ], c, a, i ) )
+def BNE( c, a, i ):
+  return ( CPU_OPC( OP_BNE[ 0 ], c, a, i ) )
+# Comparison 'a equals b?' ops: CMPEQC, CMPEQ (? = ==)
+def CMPEQC( c, a, i ):
+  return ( CPU_OPC( OP_CMPEQC[ 0 ], c, a, i ) )
+def CMPEQ( c, a, b ):
+  return ( CPU_OP( OP_CMPEQ[ 0 ], c, a, b ) )
+# Comparison 'a lesser or equal to b?' ops: CMPLEC, CMPLE (? = <=)
+def CMPLEC( c, a, i ):
+  return ( CPU_OPC( OP_CMPLEC[ 0 ], c, a, i ) )
+def CMPLE( c, a, b ):
+  return ( CPU_OP( OP_CMPLE[ 0 ], c, a, b ) )
+# Comparison 'a less than b?' ops: CMPLTC, CMPLT (? = <)
+def CMPLTC( c, a, i ):
+  return ( CPU_OPC( OP_CMPLTC[ 0 ], c, a, i ) )
+def CMPLT( c, a, b ):
+  return ( CPU_OP( OP_CMPLT[ 0 ], c, a, b ) )
+# Division ops: DIVC, DIV (? = //)
+def DIVC( c, a, i ):
+  return ( CPU_OPC( OP_DIVC[ 0 ], c, a, i ) )
+def DIV( c, a, b ):
+  return ( CPU_OP( OP_DIV[ 0 ], c, a, b ) )
+# Uncondigional jump op: JMP (Stores current PC in Rc, jumps to Ra.)
+def JMP( c, a ):
+  return ( CPU_OPC( OP_JMP[ 0 ], c, a, 0x0000 ) )
+# TODO: Load ops: LD, LDR
+# Multiplication ops: MULC, MUL (? = *)
+def MULC( c, a, i ):
+  return ( CPU_OPC( OP_MULC[ 0 ], c, a, i ) )
+def MUL( c, a, b ):
+  return ( CPU_OP( OP_MUL[ 0 ], c, a, b ) )
+# Bitwise 'or' ops: ORC, OR (? = |)
+def ORC( c, a, i ):
+  return ( CPU_OPC( OP_ORC[ 0 ], c, a, i ) )
+def OR( c, a, b ):
+  return ( CPU_OP( OP_OR[ 0 ], c, a, b ) )
+# Left shift ops: SHLC, SHL (? = <<)
+def SHLC( c, a, i ):
+  return ( CPU_OPC( OP_SHLC[ 0 ], c, a, i ) )
+def SHL( c, a, b ):
+  return ( CPU_OP( OP_SHL[ 0 ], c, a, b ) )
+# Right shift ops: SHRC, SHR (? = >>)
+def SHRC( c, a, i ):
+  return ( CPU_OPC( OP_SHRC[ 0 ], c, a, i ) )
+def SHR( c, a, b ):
+  return ( CPU_OP( OP_SHR[ 0 ], c, a, b ) )
+# Right shift with sign extension ops: SRAC, SRA (? = >>)
+def SRAC( c, a, i ):
+  return ( CPU_OPC( OP_SRAC[ 0 ], c, a, i ) )
+def SRA( c, a, b ):
+  return ( CPU_OP( OP_SRA[ 0 ], c, a, b ) )
+# Subtraction ops: MULC, MUL (? = -)
+def SUBC( c, a, i ):
+  return ( CPU_OPC( OP_SUBC[ 0 ], c, a, i ) )
+def SUB( c, a, b ):
+  return ( CPU_OP( OP_SUB[ 0 ], c, a, b ) )
+# TODO: Store op: ST
+# Bitwise 'xor' ops: XORC, XOR (? = ^)
+def XORC( c, a, i ):
+  return ( CPU_OPC( OP_XORC[ 0 ], c, a, i ) )
+def XOR( c, a, b ):
+  return ( CPU_OP( OP_XOR[ 0 ], c, a, b ) )
+# Bitwise 'xnor' ops: XNORC, XNOR (? = !^)
+def XNORC( c, a, i ):
+  return ( CPU_OPC( OP_XNORC[ 0 ], c, a, i ) )
+def XNOR( c, a, b ):
+  return ( CPU_OP( OP_XNOR[ 0 ], c, a, b ) )
