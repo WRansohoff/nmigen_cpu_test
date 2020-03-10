@@ -23,7 +23,7 @@ quick_test = ROM( [
   BNE( 27, 0, 0x0004 ),
   0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF,
   # BEQ (expect r26 = 0x20, PC skips over the following dummy data)
-  SUB( 22, 22, 22 ), BEQ( 26, 22, 0x0002 ), 0xDEADBEEF, 0xDEADBEEF,
+  BEQ( 26, 31, 0x0002 ), 0xDEADBEEF, 0xDEADBEEF,
   # BEQ, BNE (expect r25 = 0x2C, r24 = 0x30, but no branching.)
   BEQ( 25, 0, 0xFFFF ), BNE( 24, 22, 0xFFFF ),
   # ANDC, AND (expect r2 = r3 = 0x00001200)
@@ -51,7 +51,7 @@ quick_test = ROM( [
   SHRC( 13, 11, 8 ), SHR( 14, 13, 6 ),
   # SUBC, SUB (expect r15 = 0xFFFF8003, r16 = 0x00001234)
   SUBC( 15, 6, 0x7FFF ), SUB( 16, 1, 0 ),
-  # SRAC, SRA (expect r17 = 0xFFFFFFFF, r18 = 0xFFFFE000)
+  # SRAC, SRA (expect r17 = 0xFFFFFFFF, r18 = 0xFFFFFE00)
   SRAC( 17, 15, 16 ), SRAC( 18, 15, 6 ),
   # XORC, XOR (expect r19 = 0xFFFF96F0, r20 = 0x000067FF)
   XORC( 19, 0, 0x84C4 ), XOR( 20, 17, 19 ),
@@ -61,11 +61,11 @@ quick_test = ROM( [
   LD( 23, 31, 0x0008 ), LD( 24, 31, 0x0003 ),
   # ST (store 0x00001234 in RAM address 0x04.)
   ADDC( 25, 31, 1 ), SHLC( 25, 25, 29 ), ST( 0, 25, 0x0004 ),
-  # LDR (expect r26 = 0x7F5FFFF, 0x63590004, 0x63590004)
+  # LDR (expect r26 = 0x7F5FFFFF, 0x63590004, 0x63590004)
   # Remember, LDR increments the PC *before* applying the offset.
   LDR( 26, 0xFFFF ), LDR( 26, 0x0001 ), LDR( 26, 0x0000 ),
   # LD (expect r26 = 0x00001234, loaded from 0x20000004 in RAM)
-  LD( 26, 25, 0x00004 ),
+  LD( 26, 25, 0x0004 ),
   # JMP (rc = r28, ra = r29, PC returns to 0x00000000)
   JMP( 28, 29 ),
   # Dummy data (should not be reached).
@@ -96,9 +96,96 @@ loop_exp = {
 # Expected runtime values for the "Quick Test" program.
 # These values are commented in the program above for each operation.
 quick_exp = {
-  # TODO: fill in actual expected values for the 'quick test' program.
-  0: [ { 'r': 'pc', 'v': 0x00000000 } ],
-  1: [ { 'r': 'pc', 'v': 0x00000004 } ],
-  2: [ { 'r': 'pc', 'v': 0x00000008 } ],
-  3: [ { 'r': 'pc', 'v': 0x0000001C } ]
+  # Starting state: PC = 0.
+  0:  [ { 'r': 'pc', 'v': 0x00000000 } ],
+  # After the first 'ADD' ops, r0 = 0x00001234 and r1 = 0x00002468.
+  2:  [
+        { 'r': 'pc', 'v': 0x00000008 },
+        { 'r': 0,    'v': 0x00001234 },
+        { 'r': 1,    'v': 0x00002468 }
+      ],
+  # After the next 'BNE' op, r27 = 0x0000000C and the PC skips ahead.
+  3:  [
+        { 'r': 'pc', 'v': 0x0000001C },
+        { 'r': 27,   'v': 0x0000000C }
+      ],
+  # After the next 'BEQ' op, r26 = 0x00000020, and PC skips again.
+  4:  [
+        { 'r': 'pc', 'v': 0x00000028 },
+        { 'r': 26,   'v': 0x00000020 }
+      ],
+  # Two more branch operations set r25 = 0x0000002C, r24 = 0x00000030,
+  # but the PC does not jump ahead.
+  6:  [
+        { 'r': 'pc', 'v': 0x00000030 },
+        { 'r': 25,   'v': 0x0000002C },
+        { 'r': 24,   'v': 0x00000030 }
+      ],
+  # Next are two 'AND' ops: r2 = r3 = 0x00001200.
+  8:  [
+        { 'r': 2, 'v': 0x00001200 },
+        { 'r': 3, 'v': 0x00001200 }
+      ],
+  # Then come some 'DIV' and 'MUL' operations.
+  12: [
+        { 'r': 5, 'v': 0x00001234 },
+        { 'r': 6, 'v': 0x00000002 },
+        { 'r': 7, 'v': 0x0000002A },
+        { 'r': 8, 'v': 0x000006E4 }
+      ],
+  # A series of compare operations produce 1s or 0s.
+  13: [ { 'r': 4, 'v': 1 } ],
+  14: [ { 'r': 4, 'v': 0 } ],
+  15: [ { 'r': 4, 'v': 1 } ],
+  16: [ { 'r': 4, 'v': 0 } ],
+  17: [ { 'r': 4, 'v': 1 } ],
+  18: [ { 'r': 4, 'v': 1 } ],
+  19: [ { 'r': 4, 'v': 0 } ],
+  20: [ { 'r': 4, 'v': 1 } ],
+  21: [ { 'r': 4, 'v': 1 } ],
+  22: [ { 'r': 4, 'v': 0 } ],
+  23: [ { 'r': 4, 'v': 1 } ],
+  24: [ { 'r': 4, 'v': 0 } ],
+  25: [ { 'r': 4, 'v': 0 } ],
+  26: [ { 'r': 4, 'v': 1 } ],
+  27: [ { 'r': 4, 'v': 0 } ],
+  28: [ { 'r': 4, 'v': 0 } ],
+  # Two 'OR' ops: r9 = 0x00005674, r10 = 0x0000567E
+  30: [
+        { 'r': 9,  'v': 0x00005674 },
+        { 'r': 10, 'v': 0x0000567E }
+      ],
+  # Two 'SUB' and six shift operations set r11-r18.
+  38: [
+        { 'r': 11, 'v': 0x12340000 },
+        { 'r': 12, 'v': 0x000159D0 },
+        { 'r': 13, 'v': 0x00123400 },
+        { 'r': 14, 'v': 0x00048D00 },
+        { 'r': 15, 'v': 0xFFFF8003 },
+        { 'r': 16, 'v': 0x00001234 },
+        { 'r': 17, 'v': 0xFFFFFFFF },
+        { 'r': 18, 'v': 0xFFFFFE00 }
+      ],
+  # Four more 'XOR' and 'XNOR' ops set r19-r22.
+  42: [
+        { 'r': 19, 'v': 0xFFFF96F0 },
+        { 'r': 20, 'v': 0x000067FF },
+        { 'r': 21, 'v': 0xFFEDD9CB },
+        { 'r': 22, 'v': 0x000067FF }
+      ],
+  # Two 'LD' operations load r23 = LD( 26, 25, 0x0004 ), and verify
+  # that a mis-aligned load places 0 in r24.
+  44: [
+        { 'r': 23, 'v': 0x77600004 },
+        { 'r': 24, 'v': 0x00000000 },
+      ],
+  # Three more ops store 0x00001234 into the second word of RAM.
+  47: [ { 'r': "RAM%d"%( 0x04 ), 'v': 0x00001234 } ],
+  # Four more 'load' ops place different values in r26.
+  48: [ { 'r': 26, 'v': 0x7F5FFFFF } ],
+  49: [ { 'r': 26, 'v': 0x63590004 } ],
+  50: [ { 'r': 26, 'v': 0x63590004 } ],
+  51: [ { 'r': 26, 'v': 0x00001234 } ],
+  # Finally, the PC should jump back to address 0 and start again.
+  52: [ { 'r': 'pc', 'v': 0x00000000 } ]
 }

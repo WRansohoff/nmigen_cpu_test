@@ -318,6 +318,23 @@ def cpu_run( cpu, expected, ticks ):
               print( "  \033[31mFAIL:\033[0m pc  == %s"
                      " after %d operations (got: %s)"
                      %( hexs( ex[ 'v' ] ), ni, hexs( cpc ) ) )
+          # Special case: RAM data.
+          elif type( ex[ 'r' ] ) == str and ex[ 'r' ][ 0:3 ] == "RAM":
+            rama = int( ex[ 'r' ][ 3: ] )
+            if ( rama % 4 ) != 0:
+              print( "  \033[31mFAIL:\033[0m RAM == %s @ 0x%08X"
+                     " after %d operations (mis-aligned address)"
+                     %( hexs( ex[ 'v' ] ), rama, ni ) )
+            else:
+              cpd = yield cpu.ram.data[ rama // 4 ]
+              if cpd == ex[ 'v' ]:
+                print( "  \033[32mPASS:\033[0m RAM == %s @ 0x%08X"
+                       " after %d operations"
+                       %( hexs( ex[ 'v' ] ), rama, ni ) )
+              else:
+                print( "  \033[31mFAIL:\033[0m RAM == %s @ 0x%08X"
+                       " after %d operations (got: %s)"
+                       %( hexs( ex[ 'v' ] ), rama, ni, hexs( cpd ) ) )
           # Numbered general-purpose registers.
           elif ex[ 'r' ] > 0 and ex[ 'r' ] < 32:
             cr = yield cpu.r[ ex[ 'r' ] ]
