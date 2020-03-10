@@ -83,11 +83,11 @@ quick_test = ROM( [
 # 'return PC' value) after the first 'jump' instruction is executed.
 loop_exp = {
   0: [ { 'r': 'pc', 'v': 0x00000000 } ],
-  4: [
+  1: [
        { 'r': 'pc', 'v': 0x00000000 },
        { 'r': 29,   'v': 0x00000004 }
      ],
-  8: [
+  2: [
        { 'r': 'pc', 'v': 0x00000000 },
        { 'r': 29,   'v': 0x00000004 }
      ]
@@ -95,11 +95,10 @@ loop_exp = {
 
 # Expected runtime values for the "Quick Test" program.
 # These values are commented in the program above for each operation.
-# TODO: There's got to be a better way to define the 'tick' values
-#       at which each instruction finishes executing...maybe I should
-#       count "CPU_PC_LOAD" states instead of CPU cycles.
 quick_exp = {
   # TODO: fill in actual expected values for the 'quick test' program.
   0: [ { 'r': 'pc', 'v': 0x00000000 } ],
-  8: [ { 'r': 'pc', 'v': 0x00000004 } ]
+  1: [ { 'r': 'pc', 'v': 0x00000004 } ],
+  2: [ { 'r': 'pc', 'v': 0x00000008 } ],
+  3: [ { 'r': 'pc', 'v': 0x0000001C } ]
 }

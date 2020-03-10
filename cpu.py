@@ -10,6 +10,19 @@ from ram import *
 # CPU module: #
 ###############
 
+# FSM state definitions. TODO: Remove after figuring out how to
+# access the internal FSM from tests. Also, consolidate these steps...
+CPU_PC_LOAD      = 0
+CPU_PC_ROM_FETCH = 1
+CPU_PC_DECODE    = 2
+CPU_ALU_IN       = 4
+CPU_ALU_OUT      = 5
+CPU_LD           = 6
+CPU_ST           = 7
+CPU_PC_INCR      = 8
+CPU_STATES_MAX   = 8
+
+# CPU module.
 class CPU( Elaboratable ):
   def __init__( self, rom_module ):
     # Program Counter register.
@@ -30,6 +43,11 @@ class CPU( Elaboratable ):
     # The RAM submodule which simulates re-writable data storage.
     # (512 bytes of RAM = 128 words)
     self.ram = RAM( 128 )
+
+    # Debugging signal(s):
+    # Track FSM state. TODO: There must be a way to access this
+    # from the Module's FSM object, but I don't know how.
+    self.fsms = Signal( range( CPU_STATES_MAX ), reset = CPU_PC_LOAD )
 
   # Helper method to define shared logic for 'Rc = Ra ? Rb' ALU
   # operations such as 'ADD', 'AND', 'CMPEQ', etc.
@@ -95,10 +113,12 @@ class CPU( Elaboratable ):
       # "Load PC": Fetch the memory location in the program counter
       #            from ROM, to prepare for decoding.
       with m.State( "CPU_PC_LOAD" ):
+        m.d.comb += self.fsms.eq( CPU_PC_LOAD ) #TODO: Remove
         m.next = "CPU_PC_ROM_FETCH"
       # "ROM Fetch": Wait for the instruction to load from ROM, and
       #              populate register fields to prepare for decoding.
       with m.State( "CPU_PC_ROM_FETCH" ):
+        m.d.comb += self.fsms.eq( CPU_PC_ROM_FETCH ) #TODO: Remove
         with m.If( self.rom.out[ 15 ] ):
           m.d.sync += imm.eq( self.rom.out | 0xFFFF0000 )
         with m.Else():
@@ -113,6 +133,7 @@ class CPU( Elaboratable ):
       # "Decode PC": Figure out what sort of instruction to execute,
       #              and prepare associated registers.
       with m.State( "CPU_PC_DECODE" ):
+        m.d.comb += self.fsms.eq( CPU_PC_DECODE ) #TODO: Remove
         # Load/Store ops: LD, LDR, ST. For now, ROM is mapped to both
         # 0x00... and 0x08..., and RAM is mapped to 0x20...
         # Other prefixes will return 0 for loads. Stores can only
@@ -205,18 +226,21 @@ class CPU( Elaboratable ):
       # "ALU Input": Send a boolean / logical / arithmetic
       #              operation result from the ALU.
       with m.State( "CPU_ALU_IN" ):
+        m.d.comb += self.fsms.eq( CPU_ALU_IN ) #TODO: Remove
         m.d.comb += self.alu.start.eq( 1 )
         with m.If( self.alu.done == 0 ):
           m.next = "CPU_ALU_OUT"
       # "ALU Output": Store a boolean / logical / arithmetic
       #               operation result from the ALU.
       with m.State( "CPU_ALU_OUT" ):
+        m.d.comb += self.fsms.eq( CPU_ALU_OUT ) #TODO: Remove
         for i in range( 30 ):
           with m.If( rc == i ):
             m.d.sync += self.r[ i ].eq( self.alu.y )
         m.next = "CPU_PC_INCR"
       # "Load state": Read ROM or RAM data.
       with m.State( "CPU_LD" ):
+        m.d.comb += self.fsms.eq( CPU_LD ) #TODO: Remove
         with m.If( opcode == OP_LDR[ 0 ] ):
           m.d.comb += self.mp.eq( self.pc + ( imm * 4 ) + 4 )
         for i in range( 32 ):
@@ -238,6 +262,7 @@ class CPU( Elaboratable ):
         m.next = "CPU_PC_INCR"
       # Store state": Write RAM data.
       with m.State( "CPU_ST" ):
+        m.d.comb += self.fsms.eq( CPU_ST ) #TODO: Remove
         for i in range( 32 ):
           with m.If( ra == i ):
             m.d.comb += self.mp.eq( self.r[ i ] + imm )
@@ -251,6 +276,7 @@ class CPU( Elaboratable ):
       # "Store state": Write RAM data.
       # "Increment PC": Increment the program counter by one word.
       with m.State( "CPU_PC_INCR" ):
+        m.d.comb += self.fsms.eq( CPU_PC_INCR ) #TODO: Remove
         m.d.sync += self.pc.eq( self.pc + 4 )
         m.next = "CPU_PC_LOAD"
     
@@ -267,39 +293,49 @@ from programs import *
 # Helper method to run a CPU device for a given number of cycles,
 # and verify its expected register values over time.
 def cpu_run( cpu, expected, ticks ):
+  # Record how many CPU instructions have executed.
+  ni = -1
   # Let the CPU run for N ticks.
   for i in range( ticks ):
-    # Check 'expected' values, if any.
-    if i in expected:
-      for j in range( len( expected[ i ] ) ):
-        ex = expected[ i ][ j ]
-        # Special case: program counter.
-        if ex[ 'r' ] == 'pc':
-          cpc = yield cpu.pc
-          if cpc == ex[ 'v' ]:
-            print( "  \033[32mPASS:\033[0m pc  == %s @ t = %d ticks"
-                   %( hexs( ex[ 'v' ] ), i ) )
-          else:
-            print( "  \033[31mFAIL:\033[0m pc  == %s @ t = %d ticks"
-                   " (got: %s)"
-                   %( hexs( ex[ 'v' ] ), i, hexs( cpc ) ) )
-        # Numbered general-purpose registers.
-        elif ex[ 'r' ] > 0 and ex[ 'r' ] < 32:
-          cr = yield cpu.r[ ex[ 'r' ] ]
-          if cr == ex[ 'v' ]:
-            print( "  \033[32mPASS:\033[0m r%02d == %s @ t = %d ticks"
-                   %( ex[ 'r' ], hexs( ex[ 'v' ] ), i ) )
-          else:
-            print( "  \033[31mFAIL:\033[0m r%02d == %s @ t = %d ticks"
-                   " (got: %s)"
-                   %( ex[ 'r' ], hexs( ex[ 'v' ] ), i, hexs( cr ) ) )
+    # Let combinational logic settle before checking values.
+    yield Settle()
+    # Only check expected values once per instruction.
+    fsm_state = yield cpu.fsms
+    if fsm_state == CPU_PC_ROM_FETCH:
+      ni += 1
+      # Check 'expected' values, if any.
+      if ni in expected:
+        for j in range( len( expected[ ni ] ) ):
+          ex = expected[ ni ][ j ]
+          # Special case: program counter.
+          if ex[ 'r' ] == 'pc':
+            cpc = yield cpu.pc
+            if cpc == ex[ 'v' ]:
+              print( "  \033[32mPASS:\033[0m pc  == %s"
+                     " after %d operations"
+                     %( hexs( ex[ 'v' ] ), ni ) )
+            else:
+              print( "  \033[31mFAIL:\033[0m pc  == %s"
+                     " after %d operations (got: %s)"
+                     %( hexs( ex[ 'v' ] ), ni, hexs( cpc ) ) )
+          # Numbered general-purpose registers.
+          elif ex[ 'r' ] > 0 and ex[ 'r' ] < 32:
+            cr = yield cpu.r[ ex[ 'r' ] ]
+            if cr == ex[ 'v' ]:
+              print( "  \033[32mPASS:\033[0m r%02d == %s"
+                     " after %d operations"
+                     %( ex[ 'r' ], hexs( ex[ 'v' ] ), ni ) )
+            else:
+              print( "  \033[31mFAIL:\033[0m r%02d == %s"
+                     " after %d operations (got: %s)"
+                     %( ex[ 'r' ], hexs( ex[ 'v' ] ), ni, hexs( cr ) ) )
     yield Tick()
 
 # Helper method to simulate running a CPU with the given ROM image
 # for the specified number of CPU cycles. The 'name' field is used
 # for printing and generating the waveform filename: "cpu_[name].vcd".
 # The 'expected' dictionary contains a series of expected register
-# values at specific points in time, defined by CPU cycles.
+# values at specific points in time, defined by elapsed instructions.
 def cpu_sim( name, rom, expected, ticks ):
   print( "CPU '%s' test program:"%name )
   # Create the CPU device.
