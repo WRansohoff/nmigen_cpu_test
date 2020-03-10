@@ -16,6 +16,8 @@ class CPU( Elaboratable ):
     self.pc = Signal( 32, reset = 0x00000000 )
     # Exception Pointer register.
     self.xp = Signal( 32, reset = 0x00000000 )
+    # Intermediate load/store memory pointer.
+    self.mp = Signal( 32, reset = 0x00000000 )
     # The main 32 CPU registers.
     self.r  = [
       Signal( 32, reset = 0x00000000, name = "r%d"%i )
@@ -77,8 +79,10 @@ class CPU( Elaboratable ):
     self.r[ 31 ].eq( 0x00000000 )
     # r30 is the exception pointer.
     self.r[ 30 ].eq( self.xp )
-    # Hard-wire the program counter to the simulated ROM address.
+    # Set the program counter to the simulated ROM address by default.
     m.d.comb += self.rom.addr.eq( self.pc )
+    # Set the simulated RAM address to 0 by default.
+    m.d.comb += self.ram.addr.eq( 0 )
     # Set the ALU's 'start' bit to 0 by default.
     m.d.comb += self.alu.start.eq( 0 )
 
@@ -106,12 +110,24 @@ class CPU( Elaboratable ):
       # "Decode PC": Figure out what sort of instruction to execute,
       #              and prepare associated registers.
       with m.State( "CPU_PC_DECODE" ):
-        # Load/Store ops: LD, LDR, ST.
-        with m.If( ( opcode == OP_LD[ 0 ] ) |
-                   ( opcode == OP_LDR[ 0 ] ) |
-                   ( opcode == OP_ST[ 0 ] ) ):
-          # TODO: Load/Store logic.
-          m.next = "CPU_LS"
+        # Load/Store ops: LD, LDR, ST. For now, ROM is mapped to both
+        # 0x00... and 0x08..., and RAM is mapped to 0x20...
+        # Other prefixes will return 0 (loads) or do nothing (stores)
+        # LD "LoaD" operation: Rc = Memory[ Ra + immediate ]
+        with m.If( opcode == OP_LD[ 0 ] ):
+          for i in range( 32 ):
+            with m.If( ra == i ):
+              m.d.comb += self.mp.eq( self.r[ i ] + imm )
+              with m.If( self.r[ i ] & 0x20000000 ):
+                m.d.comb += self.ram.addr.eq( self.mp & 0x1FFFFFFF ),
+                m.d.sync += self.ram.ren.eq( 0b1 )
+              with m.Else():
+                m.d.comb += self.rom.addr.eq( self.mp & 0x07FFFFFF )
+          m.next = "CPU_LD"
+        with m.Elif( opcode == OP_LDR[ 0 ] ):
+          m.next = "CPU_PC_INCR"
+        with m.Elif( opcode == OP_ST[ 0 ] ):
+          m.next = "CPU_PC_INCR"
         # Branch/Jump ops: JMP, BEQ, BNE.
         # JMP "JuMP" operation: Place the next PC value in Rc, then
         # set PC to (Ra & 0xFFFFFFFC) to ensure it is word-aligned.
@@ -172,7 +188,23 @@ class CPU( Elaboratable ):
             m.d.sync += self.r[ i ].eq( self.alu.y )
         m.next = "CPU_PC_INCR"
       # TODO: "Load or Store": Read ROM or read/write RAM data.
-      with m.State( "CPU_LS" ):
+      with m.State( "CPU_LD" ):
+        for i in range( 32 ):
+          with m.If( ra == i ):
+            m.d.comb += self.mp.eq( self.r[ i ] + imm )
+          with m.If( rc == i ):
+            with m.If( self.mp & 0x20000000 ):
+              m.d.comb += self.ram.addr.eq( self.mp & 0x1FFFFFFF ),
+              m.d.sync += [
+                self.ram.ren.eq( 0b1 ),
+                self.r[ i ].eq( self.ram.dout )
+              ]
+            with m.Elif( ( self.mp & 0x08000000 ) |
+                         ( self.mp & 0x07FFFFFF ) ):
+              m.d.comb += self.rom.addr.eq( self.mp & 0x07FFFFFF )
+              m.d.sync += self.r[ i ].eq( self.rom.out )
+            with m.Else():
+              m.d.sync += self.r[ i ].eq( 0x00000000 )
         m.next = "CPU_PC_INCR"
       # "Increment PC": Increment the program counter by one word.
       with m.State( "CPU_PC_INCR" ):
@@ -197,7 +229,7 @@ if __name__ == "__main__":
   # Create a simulated ROM module with a dummy program.
   rom = ROM( [
     # ADDC, ADD (expect r0 = 0x00001234, r1 = 0x00002468)
-    ADDC( 0, 0, 0x1234 ), ADD( 1, 0, 0 ),
+    ADDC( 0, 31, 0x1234 ), ADD( 1, 0, 0 ),
     # BNE (expect r27 = 0x0C, PC skips over the following dummy data)
     BNE( 27, 0, 0x0004 ),
     0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF,
@@ -236,6 +268,8 @@ if __name__ == "__main__":
     XORC( 19, 0, 0x84C4 ), XOR( 20, 17, 19 ),
     # XNORC, XNOR (expect r21 = 0xFFEDD9CB, r22 = 0x000067FF)
     XNORC( 21, 13, 0x1234 ), XNOR( 22, 17, 20 ),
+    # LD (expect r23 = 0x77600004, r24 = 0x00000000)
+    LD( 23, 31, 0x0008 ), LD( 24, 31, 0x0003 ),
     # JMP (rc = r28, ra = r29, PC returns to 0x00000000)
     JMP( 28, 29 ),
     # Dummy data (should not be reached).
@@ -248,7 +282,7 @@ if __name__ == "__main__":
   with Simulator( dut, vcd_file = open( 'cpu.vcd', 'w' ) ) as sim:
     def proc():
       # Run CPU tests.
-      sim_ticks = 300
+      sim_ticks = 350
       yield from cpu_run( dut, sim_ticks )
     sim.add_clock( 24e-6 )
     sim.add_sync_process( proc )

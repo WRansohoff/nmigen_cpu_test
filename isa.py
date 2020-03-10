@@ -164,7 +164,11 @@ def DIV( c, a, b ):
 # Uncondigional jump op: JMP (Stores current PC in Rc, jumps to Ra.)
 def JMP( c, a ):
   return ( CPU_OPC( OP_JMP[ 0 ], c, a, 0x0000 ) )
-# TODO: Load ops: LD, LDR
+# Load ops: LD, LDR (Loads a word from memory into a register)
+def LD( c, a, i ):
+  return ( CPU_OPC( OP_LD[ 0 ], c, a, i ) )
+def LDR( c, i ):
+  return ( CPU_OPC( OP_LDR[ 0 ], c, 0b11111, i ) )
 # Multiplication ops: MULC, MUL (? = *)
 def MULC( c, a, i ):
   return ( CPU_OPC( OP_MULC[ 0 ], c, a, i ) )
@@ -195,7 +199,9 @@ def SUBC( c, a, i ):
   return ( CPU_OPC( OP_SUBC[ 0 ], c, a, i ) )
 def SUB( c, a, b ):
   return ( CPU_OP( OP_SUB[ 0 ], c, a, b ) )
-# TODO: Store op: ST
+# Store op: ST (Store a word in memory from a register)
+def ST( c, a, i ):
+  return ( CPU_OPC( OP_ST[ 0 ], c, a, i ) )
 # Bitwise 'xor' ops: XORC, XOR (? = ^)
 def XORC( c, a, i ):
   return ( CPU_OPC( OP_XORC[ 0 ], c, a, i ) )

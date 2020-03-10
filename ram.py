@@ -14,7 +14,7 @@ class RAM( Elaboratable ):
     # Data word output.
     self.dout = Signal( 32, reset = 0x00000000 )
     # 'Read Enable' input bit.
-    self.ren  = Signal( 1, reset = 0b1 )
+    self.ren  = Signal( 1, reset = 0b0 )
     # Data word input.
     self.din  = Signal( 32, reset = 0x00000000 )
     # 'Write Enable' input bit.
