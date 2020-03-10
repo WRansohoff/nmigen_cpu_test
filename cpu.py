@@ -81,8 +81,13 @@ class CPU( Elaboratable ):
     self.r[ 30 ].eq( self.xp )
     # Set the program counter to the simulated ROM address by default.
     m.d.comb += self.rom.addr.eq( self.pc )
-    # Set the simulated RAM address to 0 by default.
-    m.d.comb += self.ram.addr.eq( 0 )
+    # Set the simulated RAM address to 0 by default, and set
+    # the RAM's read/write enable bits to 0 by default.
+    m.d.comb += [
+      self.ram.addr.eq( 0 ),
+      self.ram.ren.eq( 0 ),
+      self.ram.wen.eq( 0 )
+    ]
     # Set the ALU's 'start' bit to 0 by default.
     m.d.comb += self.alu.start.eq( 0 )
 
@@ -112,22 +117,38 @@ class CPU( Elaboratable ):
       with m.State( "CPU_PC_DECODE" ):
         # Load/Store ops: LD, LDR, ST. For now, ROM is mapped to both
         # 0x00... and 0x08..., and RAM is mapped to 0x20...
-        # Other prefixes will return 0 (loads) or do nothing (stores)
+        # Other prefixes will return 0 for loads. Stores can only
+        # write to RAM; they will do nothing for other prefixes.
+        # TODO: Memory space for peripherals.
         # LD "LoaD" operation: Rc = Memory[ Ra + immediate ]
         with m.If( opcode == OP_LD[ 0 ] ):
           for i in range( 32 ):
             with m.If( ra == i ):
               m.d.comb += self.mp.eq( self.r[ i ] + imm )
               with m.If( self.r[ i ] & 0x20000000 ):
-                m.d.comb += self.ram.addr.eq( self.mp & 0x1FFFFFFF ),
-                m.d.sync += self.ram.ren.eq( 0b1 )
+                m.d.comb += [
+                  self.ram.addr.eq( self.mp & 0x1FFFFFFF ),
+                  self.ram.ren.eq( 0b1 )
+                ]
               with m.Else():
                 m.d.comb += self.rom.addr.eq( self.mp & 0x07FFFFFF )
           m.next = "CPU_LD"
+        # LDR "LoaD Relative" operation: Rc = Memory[ PC + immediate ]
         with m.Elif( opcode == OP_LDR[ 0 ] ):
-          m.next = "CPU_PC_INCR"
+          m.d.comb += self.mp.eq( self.pc + ( imm * 4 ) + 4 )
+          m.next = "CPU_LD"
         with m.Elif( opcode == OP_ST[ 0 ] ):
-          m.next = "CPU_PC_INCR"
+          for i in range( 32 ):
+            with m.If( ra == i ):
+              m.d.comb += self.mp.eq( self.r[ i ] + imm )
+              with m.If( self.r[ i ] & 0x20000000 ):
+                m.d.comb += [
+                  self.ram.addr.eq( self.mp & 0x1FFFFFFFF ),
+                  self.ram.wen.eq( 0b1 )
+                ]
+            with m.If( rc == i ):
+              m.d.sync += self.ram.din.eq( self.r[ i ] )
+          m.next = "CPU_ST"
         # Branch/Jump ops: JMP, BEQ, BNE.
         # JMP "JuMP" operation: Place the next PC value in Rc, then
         # set PC to (Ra & 0xFFFFFFFC) to ensure it is word-aligned.
@@ -187,18 +208,18 @@ class CPU( Elaboratable ):
           with m.If( rc == i ):
             m.d.sync += self.r[ i ].eq( self.alu.y )
         m.next = "CPU_PC_INCR"
-      # TODO: "Load or Store": Read ROM or read/write RAM data.
+      # "Load state": Read ROM or RAM data.
       with m.State( "CPU_LD" ):
         for i in range( 32 ):
           with m.If( ra == i ):
             m.d.comb += self.mp.eq( self.r[ i ] + imm )
           with m.If( rc == i ):
             with m.If( self.mp & 0x20000000 ):
-              m.d.comb += self.ram.addr.eq( self.mp & 0x1FFFFFFF ),
-              m.d.sync += [
-                self.ram.ren.eq( 0b1 ),
-                self.r[ i ].eq( self.ram.dout )
+              m.d.comb += [
+                self.ram.addr.eq( self.mp & 0x1FFFFFFF ),
+                self.ram.ren.eq( 0b1 )
               ]
+              m.d.sync += self.r[ i ].eq( self.ram.dout )
             with m.Elif( ( self.mp & 0x08000000 ) |
                          ( self.mp & 0x07FFFFFF ) ):
               m.d.comb += self.rom.addr.eq( self.mp & 0x07FFFFFF )
@@ -206,6 +227,19 @@ class CPU( Elaboratable ):
             with m.Else():
               m.d.sync += self.r[ i ].eq( 0x00000000 )
         m.next = "CPU_PC_INCR"
+      # Store state": Write RAM data.
+      with m.State( "CPU_ST" ):
+        for i in range( 32 ):
+          with m.If( ra == i ):
+            m.d.comb += self.mp.eq( self.r[ i ] + imm )
+          with m.If( rc == i ):
+            with m.If( self.mp & 0x20000000 ):
+              m.d.comb += [
+                self.ram.addr.eq( self.mp & 0x1FFFFFFF ),
+                self.ram.wen.eq( 0b1 )
+              ]
+        m.next = "CPU_PC_INCR"
+      # "Store state": Write RAM data.
       # "Increment PC": Increment the program counter by one word.
       with m.State( "CPU_PC_INCR" ):
         m.d.sync += self.pc.eq( self.pc + 4 )
@@ -234,7 +268,7 @@ if __name__ == "__main__":
     BNE( 27, 0, 0x0004 ),
     0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF,
     # BEQ (expect r26 = 0x20, PC skips over the following dummy data)
-    BEQ( 26, 22, 0x0002 ), 0xDEADBEEF, 0xDEADBEEF,
+    SUB( 22, 22, 22 ), BEQ( 26, 22, 0x0002 ), 0xDEADBEEF, 0xDEADBEEF,
     # BEQ, BNE (expect r25 = 0x2C, r24 = 0x30, but no branching.)
     BEQ( 25, 0, 0xFFFF ), BNE( 24, 22, 0xFFFF ),
     # ANDC, AND (expect r2 = r3 = 0x00001200)
@@ -270,6 +304,12 @@ if __name__ == "__main__":
     XNORC( 21, 13, 0x1234 ), XNOR( 22, 17, 20 ),
     # LD (expect r23 = 0x77600004, r24 = 0x00000000)
     LD( 23, 31, 0x0008 ), LD( 24, 31, 0x0003 ),
+    # ST (store 0x00001234 in RAM address 0x04.)
+    ADDC( 25, 31, 1 ), SHLC( 25, 25, 29 ), ST( 0, 25, 0x0004 ),
+    # LDR (expect r26 = 0x?, 0x7F5F0001)
+    LDR( 26, 0xFFFF ), LDR( 26, 0x0001 ),
+    # LD (expect r26 = 0x00001234, loaded from RAM)
+    LD( 26, 25, 0x00004 ),
     # JMP (rc = r28, ra = r29, PC returns to 0x00000000)
     JMP( 28, 29 ),
     # Dummy data (should not be reached).
@@ -282,7 +322,7 @@ if __name__ == "__main__":
   with Simulator( dut, vcd_file = open( 'cpu.vcd', 'w' ) ) as sim:
     def proc():
       # Run CPU tests.
-      sim_ticks = 350
+      sim_ticks = 500
       yield from cpu_run( dut, sim_ticks )
     sim.add_clock( 24e-6 )
     sim.add_sync_process( proc )
