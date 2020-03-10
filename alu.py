@@ -166,16 +166,10 @@ class ALU( Elaboratable ):
           m.d.sync += self.y.eq( xa == xb )
         #  - 0b100101: Y = ( A <  B )
         with m.Elif( fn == C_CLT[ 0 ] ):
-          # Can't use 'xa < xb' because HW logic doesn't account
-          # for negative numbers, i.e. 0xFFFFFFFF > 0x00000000.
-          m.d.sync += self.y.eq( ( ( xb - xa ) > 0 ) &
-                                 ( ( xb - xa )[ 31 ] == 0 ) )
+          m.d.sync += self.y.eq( xa < xb )
         #  - 0b100110: Y = ( A <= B )
         with m.Elif( fn == C_CLE[ 0 ] ):
-          # Same as above; 'xa <= xb' hardware description
-          # does not account for negative numbers.
-          m.d.sync += self.y.eq( ( ( xb - xa ) >= 0 ) &
-                                 ( ( xb - xa )[ 31 ] == 0 ) )
+          m.d.sync += self.y.eq( xa <= xb )
         # Shift unit (F = [...]):
         #  - 0b101100: Y = A << B
         with m.Elif( fn == C_SHL[ 0 ] ):
