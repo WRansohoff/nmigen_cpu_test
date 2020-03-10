@@ -31,4 +31,4 @@ You can run test suites for individual components by running the corresponding P
 
 The result waveforms are saved in a `.vcd` file with the same name as the `.py` file.
 
-I haven't written tests for the actual CPU module yet; instead, the `cpu.py` file simulates the CPU's execution for a period of time given the ROM module's initial values. Only the `ADD` and `ADDC` operations work right now, so I haven't put much thought into how to encode program data for execution.
+I haven't written tests for the actual CPU module yet; instead, the `cpu.py` file simulates the CPU's execution for a period of time given the ROM module's initial values. I think that all of the operations are working now, but I won't feel confident in that until I write an automatic test suite. Right now I'm checking that things work by looking at the register values over time by opening the `cpu.vcd` file with `gtkwave`, but that's not ideal.
