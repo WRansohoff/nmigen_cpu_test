@@ -1,25 +1,11 @@
 from nmigen import *
 from nmigen.back.pysim import *
 
+from isa import *
+
 ###############
 # ALU module: #
 ###############
-
-# ALU definitions: [ bitcode, string ]
-C_AND  = [ 0b101000, "&" ]
-C_OR   = [ 0b101001, "|" ]
-C_XOR  = [ 0b101010, "^" ]
-C_XNOR = [ 0b101011, "!^" ]
-C_ADD  = [ 0b100000, "+" ]
-C_SUB  = [ 0b100001, "-" ]
-C_DIV  = [ 0b100011, "/" ]
-C_MUL  = [ 0b100010, "*" ]
-C_CEQ  = [ 0b100100, "==" ]
-C_CLT  = [ 0b100101, "<" ]
-C_CLE  = [ 0b100110, "<=" ]
-C_SHL  = [ 0b101100, "<<" ]
-C_SHR  = [ 0b101101, ">>" ]
-C_SRA  = [ 0b101110, ">>" ]
 
 class ALU( Elaboratable ):
   def __init__( self ):
@@ -193,13 +179,6 @@ class ALU( Elaboratable ):
 # Keep track of test pass / fail rates.
 p = 0
 f = 0
-
-# Helper method to pretty-print a 2s-complement 32-bit hex string.
-def hexs( h ):
-  if h >= 0:
-    return "0x%08X"%( h )
-  else:
-    return "0x%08X"%( ( h + ( 1 << 32 ) ) % ( 1 << 32 ) )
 
 # Perform an individual ALU unit test.
 def alu_ut( alu, a, b, fn, expected ):
