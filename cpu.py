@@ -26,7 +26,7 @@ class CPU( Elaboratable ):
     # The ALU submodule which performs logical operations.
     self.alu = ALU()
     # The ROM submodule which acts as simulated program data storage.
-    self.rom = rom
+    self.rom = rom_module
     # The RAM submodule which simulates re-writable data storage.
     # (512 bytes of RAM = 128 words)
     self.ram = RAM( 128 )
@@ -261,16 +261,78 @@ class CPU( Elaboratable ):
 # CPU testbench: #
 ##################
 
-# Dummy test method to let the CPU run (TODO: tests)
-def cpu_run( cpu, ticks ):
+# Helper method to run a CPU device for a given number of cycles,
+# and verify its expected register values over time.
+def cpu_run( cpu, expected, ticks ):
   # Let the CPU run for N ticks.
   for i in range( ticks ):
+    # Check 'expected' values, if any.
+    if i in expected:
+      for j in range( len( expected[ i ] ) ):
+        ex = expected[ i ][ j ]
+        # Special case: program counter.
+        if ex[ 'r' ] == 'pc':
+          cpc = yield cpu.pc
+          if cpc == ex[ 'v' ]:
+            print( "  \033[32mPASS:\033[0m pc  == %s @ t = %d ticks"
+                   %( hexs( ex[ 'v' ] ), i ) )
+          else:
+            print( "  \033[31mFAIL:\033[0m pc  == %s @ t = %d ticks"
+                   " (got: %s)"
+                   %( hexs( ex[ 'v' ] ), i, hexs( cpc ) ) )
+        # Numbered general-purpose registers.
+        elif ex[ 'r' ] > 0 and ex[ 'r' ] < 32:
+          cr = yield cpu.r[ ex[ 'r' ] ]
+          if cr == ex[ 'v' ]:
+            print( "  \033[32mPASS:\033[0m r%02d == %s @ t = %d ticks"
+                   %( ex[ 'r' ], hexs( ex[ 'v' ] ), i ) )
+          else:
+            print( "  \033[31mFAIL:\033[0m r%02d == %s @ t = %d ticks"
+                   " (got: %s)"
+                   %( ex[ 'r' ], hexs( ex[ 'v' ] ), i, hexs( cr ) ) )
     yield Tick()
+
+# Helper method to simulate running a CPU with the given ROM image
+# for the specified number of CPU cycles. The 'name' field is used
+# for printing and generating the waveform filename: "cpu_[name].vcd".
+# The 'expected' dictionary contains a series of expected register
+# values at specific points in time, defined by CPU cycles.
+def cpu_sim( name, rom, expected, ticks ):
+  print( "CPU '%s' test program:"%name )
+  # Create the CPU device.
+  cpu = CPU( rom )
+
+  # Run the simulation.
+  sim_name = 'cpu_%s.vcd'%name
+  with Simulator( cpu, vcd_file = open( sim_name, 'w' ) ) as sim:
+    def proc():
+      # Run the program and print pass/fail for individual tests.
+      yield from cpu_run( cpu, expected, ticks )
+    sim.add_clock( 24e-6 )
+    sim.add_sync_process( proc )
+    sim.run()
 
 # 'main' method to run a basic testbench.
 if __name__ == "__main__":
-  # Create a simulated ROM module with a dummy program.
-  rom = ROM( [
+  # Create a "while(1){};" ROM program.
+  loop_rom = ROM( [ JMP( 29, 31 ) ] )
+  # The 'infinite loop' program is just one 'jump' instruction.
+  # We can expect the PC to always equal 0 and r29 to hold 0x04.
+  loop_exp = {
+    0: [ { 'r': 'pc', 'v': 0x00000000 } ],
+    4: [
+         { 'r': 'pc', 'v': 0x00000000 },
+         { 'r': 29, 'v': 0x00000004 }
+       ],
+    8: [
+         { 'r': 'pc', 'v': 0x00000000 },
+         { 'r': 29, 'v': 0x00000004 }
+       ]
+  }
+  # Create a 'quick test' ROM program which contains at least one of
+  # each supported machine code instruction, but does not perform
+  # exhaustive tests for any particular instruction.
+  test_rom = ROM( [
     # ADDC, ADD (expect r0 = 0x00001234, r1 = 0x00002468)
     ADDC( 0, 31, 0x1234 ), ADD( 1, 0, 0 ),
     # BNE (expect r27 = 0x0C, PC skips over the following dummy data)
@@ -325,15 +387,8 @@ if __name__ == "__main__":
     # Dummy data (should not be reached).
     0x01234567, 0x89ABCDEF, 0xDEADBEEF, 0xFFFFFFFF, 0xFFFFFFFF
   ] )
-  # Instantiate the CPU module.
-  dut = CPU( rom )
 
-  # Run the CPU tests.
-  with Simulator( dut, vcd_file = open( 'cpu.vcd', 'w' ) ) as sim:
-    def proc():
-      # Run CPU tests.
-      sim_ticks = 500
-      yield from cpu_run( dut, sim_ticks )
-    sim.add_clock( 24e-6 )
-    sim.add_sync_process( proc )
-    sim.run()
+  # Simulate the 'infinite loop test' ROM.
+  cpu_sim( 'loop', loop_rom, loop_exp, 10 )
+  # Simulate the 'quick test' ROM.
+  cpu_sim( 'test', test_rom, {}, 500 )
