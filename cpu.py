@@ -71,9 +71,8 @@ class CPU( Elaboratable ):
     ra = Signal( 5, reset = 0b00000 )
     rb = Signal( 5, reset = 0b00000 )
     rc = Signal( 5, reset = 0b00000 )
-    # TODO: Signed immediate hints to simplify these signals?
-    imm = Signal( 32, reset = 0x00000000 )
-    imm_signex = Signal( 32, reset = 0x00000000 )
+    imm = Signal( shape = Shape( width = 32, signed = True ),
+                  reset = 0x00000000 )
 
     # r31 is hard-wired to 0.
     self.r[ 31 ].eq( 0x00000000 )
@@ -101,15 +100,14 @@ class CPU( Elaboratable ):
       #              populate register fields to prepare for decoding.
       with m.State( "CPU_PC_ROM_FETCH" ):
         with m.If( self.rom.out[ 15 ] ):
-          m.d.comb += imm_signex.eq( 0xFFFF0000 )
+          m.d.sync += imm.eq( self.rom.out | 0xFFFF0000 )
         with m.Else():
-          m.d.comb += imm_signex.eq( 0x00000000 )
+          m.d.sync += imm.eq( self.rom.out & 0x0000FFFF )
         m.d.sync += [
           opcode.eq( self.rom.out.bit_select( 26, 6 ) ),
           rc.eq( self.rom.out.bit_select( 21, 5 ) ),
           ra.eq( self.rom.out.bit_select( 16, 5 ) ),
-          rb.eq( self.rom.out.bit_select( 11, 5 ) ),
-          imm.eq( self.rom.out.bit_select( 0, 16 ) | imm_signex )
+          rb.eq( self.rom.out.bit_select( 11, 5 ) )
         ]
         m.next = "CPU_PC_DECODE"
       # "Decode PC": Figure out what sort of instruction to execute,
@@ -136,7 +134,16 @@ class CPU( Elaboratable ):
         # LDR "LoaD Relative" operation: Rc = Memory[ PC + immediate ]
         with m.Elif( opcode == OP_LDR[ 0 ] ):
           m.d.comb += self.mp.eq( self.pc + ( imm * 4 ) + 4 )
+          with m.If( self.mp & 0x20000000 ):
+            m.d.comb += [
+              self.ram.addr.eq( self.mp & 0x1FFFFFFF ),
+              self.ram.ren.eq( 0b1 )
+            ]
+          with m.Elif( ( self.mp & 0x08000000 ) |
+                       ( self.mp & 0x07FFFFFF ) ):
+            m.d.comb += self.rom.addr.eq( self.mp & 0x07FFFFFF )
           m.next = "CPU_LD"
+        # ST "STore" operation: Memory[ Ra + immediate ] = Rc
         with m.Elif( opcode == OP_ST[ 0 ] ):
           for i in range( 32 ):
             with m.If( ra == i ):
@@ -210,8 +217,10 @@ class CPU( Elaboratable ):
         m.next = "CPU_PC_INCR"
       # "Load state": Read ROM or RAM data.
       with m.State( "CPU_LD" ):
+        with m.If( opcode == OP_LDR[ 0 ] ):
+          m.d.comb += self.mp.eq( self.pc + ( imm * 4 ) + 4 )
         for i in range( 32 ):
-          with m.If( ra == i ):
+          with m.If( ( ra == i ) & ( opcode == OP_LD[ 0 ] ) ):
             m.d.comb += self.mp.eq( self.r[ i ] + imm )
           with m.If( rc == i ):
             with m.If( self.mp & 0x20000000 ):
@@ -306,9 +315,10 @@ if __name__ == "__main__":
     LD( 23, 31, 0x0008 ), LD( 24, 31, 0x0003 ),
     # ST (store 0x00001234 in RAM address 0x04.)
     ADDC( 25, 31, 1 ), SHLC( 25, 25, 29 ), ST( 0, 25, 0x0004 ),
-    # LDR (expect r26 = 0x?, 0x7F5F0001)
-    LDR( 26, 0xFFFF ), LDR( 26, 0x0001 ),
-    # LD (expect r26 = 0x00001234, loaded from RAM)
+    # LDR (expect r26 = 0x7F5FFFF, 0x63590004, 0x63590004)
+    # Remember, LDR increments the PC *before* applying the offset.
+    LDR( 26, 0xFFFF ), LDR( 26, 0x0001 ), LDR( 26, 0x0000 ),
+    # LD (expect r26 = 0x00001234, loaded from 0x20000004 in RAM)
     LD( 26, 25, 0x00004 ),
     # JMP (rc = r28, ra = r29, PC returns to 0x00000000)
     JMP( 28, 29 ),
