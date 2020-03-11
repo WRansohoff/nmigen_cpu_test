@@ -292,11 +292,11 @@ from programs import *
 
 # Helper method to run a CPU device for a given number of cycles,
 # and verify its expected register values over time.
-def cpu_run( cpu, expected, ticks ):
+def cpu_run( cpu, expected ):
   # Record how many CPU instructions have executed.
   ni = -1
   # Let the CPU run for N ticks.
-  for i in range( ticks ):
+  while ni <= expected[ 'end' ]:
     # Let combinational logic settle before checking values.
     yield Settle()
     # Only check expected values once per instruction.
@@ -310,7 +310,7 @@ def cpu_run( cpu, expected, ticks ):
           # Special case: program counter.
           if ex[ 'r' ] == 'pc':
             cpc = yield cpu.pc
-            if cpc == ex[ 'v' ]:
+            if hexs( cpc ) == hexs( ex[ 'v' ] ):
               print( "  \033[32mPASS:\033[0m pc  == %s"
                      " after %d operations"
                      %( hexs( ex[ 'v' ] ), ni ) )
@@ -327,7 +327,7 @@ def cpu_run( cpu, expected, ticks ):
                      %( hexs( ex[ 'v' ] ), rama, ni ) )
             else:
               cpd = yield cpu.ram.data[ rama // 4 ]
-              if cpd == ex[ 'v' ]:
+              if hexs( cpd ) == hexs( ex[ 'v' ] ):
                 print( "  \033[32mPASS:\033[0m RAM == %s @ 0x%08X"
                        " after %d operations"
                        %( hexs( ex[ 'v' ] ), rama, ni ) )
@@ -336,9 +336,9 @@ def cpu_run( cpu, expected, ticks ):
                        " after %d operations (got: %s)"
                        %( hexs( ex[ 'v' ] ), rama, ni, hexs( cpd ) ) )
           # Numbered general-purpose registers.
-          elif ex[ 'r' ] > 0 and ex[ 'r' ] < 32:
+          elif ex[ 'r' ] >= 0 and ex[ 'r' ] < 32:
             cr = yield cpu.r[ ex[ 'r' ] ]
-            if cr == ex[ 'v' ]:
+            if hexs( cr ) == hexs( ex[ 'v' ] ):
               print( "  \033[32mPASS:\033[0m r%02d == %s"
                      " after %d operations"
                      %( ex[ 'r' ], hexs( ex[ 'v' ] ), ni ) )
@@ -346,6 +346,7 @@ def cpu_run( cpu, expected, ticks ):
               print( "  \033[31mFAIL:\033[0m r%02d == %s"
                      " after %d operations (got: %s)"
                      %( ex[ 'r' ], hexs( ex[ 'v' ] ), ni, hexs( cr ) ) )
+    # Step the simulation.
     yield Tick()
 
 # Helper method to simulate running a CPU with the given ROM image
@@ -353,17 +354,19 @@ def cpu_run( cpu, expected, ticks ):
 # for printing and generating the waveform filename: "cpu_[name].vcd".
 # The 'expected' dictionary contains a series of expected register
 # values at specific points in time, defined by elapsed instructions.
-def cpu_sim( name, rom, expected, ticks ):
-  print( "CPU '%s' test program:"%name )
+def cpu_sim( test ):
+  print( "\033[33mSTART\033[0m running '%s' program:"%test[ 0 ] )
   # Create the CPU device.
-  cpu = CPU( rom )
+  cpu = CPU( test[ 2 ] )
 
   # Run the simulation.
-  sim_name = 'cpu_%s.vcd'%name
+  sim_name = "%s.vcd"%test[ 1 ]
   with Simulator( cpu, vcd_file = open( sim_name, 'w' ) ) as sim:
     def proc():
       # Run the program and print pass/fail for individual tests.
-      yield from cpu_run( cpu, expected, ticks )
+      yield from cpu_run( cpu, test[ 3 ] )
+      print( "\033[35mDONE\033[0m running %s: executed %d instructions"
+             %( test[ 0 ], test[ 3 ][ 'end' ] ) )
     sim.add_clock( 24e-6 )
     sim.add_sync_process( proc )
     sim.run()
@@ -371,6 +374,8 @@ def cpu_sim( name, rom, expected, ticks ):
 # 'main' method to run a basic testbench.
 if __name__ == "__main__":
   # Simulate the 'infinite loop test' ROM.
-  cpu_sim( 'loop', loop_test, loop_exp, 10 )
+  cpu_sim( loop_test )
   # Simulate the 'quick test' ROM.
-  cpu_sim( 'quick', quick_test, quick_exp, 500 )
+  cpu_sim( quick_test )
+  # Simulate the programs which test individual operations.
+  cpu_sim( add_test )

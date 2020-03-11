@@ -11,12 +11,12 @@ from cpu import *
 
 # "Infinite Loop" program: I think this is the simplest error-free
 # application that you could write, equivalent to "while(1){};".
-loop_test = ROM( [ JMP( 29, 31 ) ] )
+loop_rom = ROM( [ JMP( 29, 31 ) ] )
 
 # "Quick Test" program: this application contains at least one of
 # each supported machine code instruction, but it does not perform
 # exhaustive tests for any particular instruction.
-quick_test = ROM( [
+quick_rom = ROM( [
   # ADDC, ADD (expect r0 = 0x00001234, r1 = 0x00002468)
   ADDC( 0, 31, 0x1234 ), ADD( 1, 0, 0 ),
   # BNE (expect r27 = 0x0C, PC skips over the following dummy data)
@@ -53,9 +53,9 @@ quick_test = ROM( [
   SUBC( 15, 6, 0x7FFF ), SUB( 16, 1, 0 ),
   # SRAC, SRA (expect r17 = 0xFFFFFFFF, r18 = 0xFFFFFE00)
   SRAC( 17, 15, 16 ), SRAC( 18, 15, 6 ),
-  # XORC, XOR (expect r19 = 0xFFFF96F0, r20 = 0x000067FF)
+  # XORC, XOR (expect r19 = 0x0000690F, r20 = 0x000067FF)
   XORC( 19, 0, 0x84C4 ), XOR( 20, 17, 19 ),
-  # XNORC, XNOR (expect r21 = 0xFFEDD9CB, r22 = 0x000067FF)
+  # XNORC, XNOR (expect r21 = 0xFFEDD9CB, r22 = 0x0000690F)
   XNORC( 21, 13, 0x1234 ), XNOR( 22, 17, 20 ),
   # LD (expect r23 = 0x77600004, r24 = 0x00000000)
   LD( 23, 31, 0x0008 ), LD( 24, 31, 0x0003 ),
@@ -70,6 +70,32 @@ quick_test = ROM( [
   JMP( 28, 29 ),
   # Dummy data (should not be reached).
   0x01234567, 0x89ABCDEF, 0xDEADBEEF, 0xFFFFFFFF, 0xFFFFFFFF
+] )
+
+# "Addition Test" program: check that the 'ADD' and 'ADDC'
+# operations work correctly.
+add_rom = ROM( [
+  # r0 = 0 + 1 (= 1), r1 = r0 + r0 (= 2), r2 = r1 + 3 (= 5)
+  ADDC( 0, 31, 1 ), ADD( 1, 0, 0 ), ADDC( 2, 1, 3 ),
+  # r3 = r2 + -2 (= 3), r4 = r1 + -4 (= -2), r5 = r0 + 32767 (= 32768)
+  ADDC( 3, 2, -2 ), ADDC( 4, 1, -4 ), ADDC( 5, 0, 0x7FFF ),
+  # r6 = r5 + -32768 (= 0), r7 = r5 + r5 (= 65536)
+  ADDC( 6, 5, 0x8000 ), ADD( 7, 5, 5 ),
+  # Set r8 to (int max) and r9 to (int min)
+  SHLC( 9, 0, 31 ), SRAC( 8, 9, 32 ), XOR( 8, 9, 8 ),
+  # r10 = min + max = r11 = max + min (= -1)
+  ADD( 10, 9, 8 ), ADD( 11, 8, 9 ),
+  # r12 = max + max (=), r13 = min + min (=)
+  ADD( 12, 8, 8 ), ADD( 13, 9, 9 ),
+  # r14 = min + 1 (= 0x80000001), r15 = min - 1 (= max)
+  ADDC( 14, 9, 1 ), ADDC( 15, 9, -1 ),
+  # r16 = max + 1 (= min), r17 = max - 1 (= 0x7FFFFFFE)
+  ADDC( 16, 8, 1 ), ADDC( 17, 8, -1 ),
+  # r18 = 42, r19 = 82, r20 = 999
+  ADDC( 18, 4, 44 ), ADD( 19, 18, 18 ),
+  ADD( 19, 19, 4 ), ADDC( 20, 19, 917 ),
+  # Done; infinite loop. (r28 = jump address, r29 = r28 + 4)
+  LDR( 28, 0x0000 ), JMP( 29, 28 )
 ] )
 
 ########################################
@@ -90,7 +116,8 @@ loop_exp = {
   2: [
        { 'r': 'pc', 'v': 0x00000000 },
        { 'r': 29,   'v': 0x00000004 }
-     ]
+     ],
+  'end': 2
 }
 
 # Expected runtime values for the "Quick Test" program.
@@ -169,9 +196,9 @@ quick_exp = {
   # Four more 'XOR' and 'XNOR' ops set r19-r22.
   42: [
         { 'r': 19, 'v': 0xFFFF96F0 },
-        { 'r': 20, 'v': 0x000067FF },
+        { 'r': 20, 'v': 0x0000690F },
         { 'r': 21, 'v': 0xFFEDD9CB },
-        { 'r': 22, 'v': 0x000067FF }
+        { 'r': 22, 'v': 0x0000690F }
       ],
   # Two 'LD' operations load r23 = LD( 26, 25, 0x0004 ), and verify
   # that a mis-aligned load places 0 in r24.
@@ -187,5 +214,47 @@ quick_exp = {
   50: [ { 'r': 26, 'v': 0x63590004 } ],
   51: [ { 'r': 26, 'v': 0x00001234 } ],
   # Finally, the PC should jump back to address 0 and start again.
-  52: [ { 'r': 'pc', 'v': 0x00000000 } ]
+  52: [ { 'r': 'pc', 'v': 0x00000000 } ],
+  'end': 52
 }
+
+# Expected runtime values for the addition test program.
+# TODO: N/Z/V flag checks.
+add_exp = {
+  # The first 8 add operations should set: r0 = 1, r1 = 2, r2 = 5,
+  # r3 = 3, r4 = -2, r5 = 32768, r6 = 0, r7 = 65536.
+  8:  [
+        { 'r': 0, 'v': 1 },  { 'r': 1, 'v': 2 },
+        { 'r': 2, 'v': 5 },  { 'r': 3, 'v': 3 },
+        { 'r': 4, 'v': -2 }, { 'r': 5, 'v': 0x8000 },
+        { 'r': 6, 'v': 0 },  { 'r': 7, 'v': 0x10000 }
+      ],
+  # The next 3 ops should set r8 = 0x7FFFFFFF and r9 = 0x80000000.
+  11: [ { 'r': 8, 'v': 0x7FFFFFFF }, { 'r': 9, 'v': 0x80000000 } ],
+  # The next 4 ops add (max/min) + (max/min) in r10-r13
+  15: [
+        { 'r': 10, 'v': -1 }, { 'r': 11, 'v': -1 },
+        { 'r': 12, 'v': -2 }, { 'r': 13, 'v': 0 }
+      ],
+  # Then, min/max +/- 1 in r14-17.
+  19: [
+        { 'r': 14, 'v': 0x80000001 }, { 'r': 15, 'v': 0x7FFFFFFF },
+        { 'r': 16, 'v': 0x80000000 }, { 'r': 17, 'v': 0x7FFFFFFE }
+      ],
+  # A few more small-number checks.
+  23: [
+        { 'r': 18, 'v': 42 }, { 'r': 19, 'v': 82 },
+        { 'r': 20, 'v': 999 }
+      ],
+  'end': 25
+}
+
+############################################
+# Collected definitions for test programs. #
+# These are just arrays with string names, #
+# ROM images, and expected runtime values. #
+############################################
+
+loop_test  = [ 'inifinite loop test', 'cpu_loop', loop_rom, loop_exp ]
+quick_test = [ 'quick test', 'cpu_quick', quick_rom, quick_exp ]
+add_test   = [ 'addition test', 'cpu_add', add_rom, add_exp ]
