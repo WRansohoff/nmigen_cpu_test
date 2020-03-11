@@ -25,9 +25,8 @@ class ALU( Elaboratable ):
     self.z = Signal()
     # 'V' arithmetic flag (last result overflowed)
     self.v = Signal()
-    # 'Start' and 'Done' signalling bits.
-    self.start = Signal()
-    self.done  = Signal()
+    # 'Start' signal to latch inputs.
+    self.start = Signal( reset = 0b0 )
 
   def elaborate( self, platform ):
     # Core ALU module.
@@ -46,7 +45,41 @@ class ALU( Elaboratable ):
     divb = Signal( shape = Shape( width = 32, signed = False ) )
     divs = Signal()
 
-    # Combinational N, Z, and V arithmetic flags.
+    # Latch input values at rising clock edges if 'start' is set.
+    with m.If( self.start ):
+      m.d.sync += [
+        xa.eq( self.a ),
+        xb.eq( self.b ),
+        ua.eq( self.a ),
+        ub.eq( self.b ),
+        fn.eq( self.f ),
+      ]
+      with m.If( ( self.b < 0 ) & ( self.a < 0 ) ):
+        m.d.sync += [
+          diva.eq( -self.a ),
+          divb.eq( -self.b ),
+          divs.eq( 0 )
+        ]
+      with m.Elif( self.a < 0 ):
+        m.d.sync += [
+          diva.eq( -self.a ),
+          divb.eq( self.b ),
+          divs.eq( 1 )
+        ]
+      with m.Elif( self.b < 0 ):
+        m.d.sync += [
+          diva.eq( self.a ),
+          divb.eq( -self.b ),
+          divs.eq( 1 )
+        ]
+      with m.Else():
+        m.d.sync += [
+          diva.eq( self.a ),
+          divb.eq( self.b ),
+          divs.eq( 0 )
+        ]
+
+    # Combinatorial N, Z, and V arithmetic flags.
     # 'N' flag is always equal to the most significant result bit.
     m.d.comb += self.n.eq( self.y.bit_select( 31, 1 ) )
     # 'Z' flag is true if the result is zero.
@@ -67,108 +100,62 @@ class ALU( Elaboratable ):
       # TODO: Should multiplication also set the overflow flag?
       m.d.comb += self.v.eq( 0 )
 
-    # Main ALU FSM; two states, "IDLE" and "BUSY".
-    with m.FSM() as fsm:
-      # Latch input / function values when start = 1 in "IDLE" state.
-      with m.State( "ALU_IDLE" ):
-        m.d.comb += busy.eq( self.start )
-        with m.If( busy ):
-          m.d.sync += [
-            xa.eq( self.a ),
-            xb.eq( self.b ),
-            ua.eq( self.a ),
-            ub.eq( self.b ),
-            fn.eq( self.f ),
-            self.done.eq( 0 )
-          ]
-          with m.If( ( self.b < 0 ) & ( self.a < 0 ) ):
-            m.d.sync += [
-              diva.eq( -self.a ),
-              divb.eq( -self.b ),
-              divs.eq( 0 )
-            ]
-          with m.Elif( self.a < 0 ):
-            m.d.sync += [
-              diva.eq( -self.a ),
-              divb.eq( self.b ),
-              divs.eq( 1 )
-            ]
-          with m.Elif( self.b < 0 ):
-            m.d.sync += [
-              diva.eq( self.a ),
-              divb.eq( -self.b ),
-              divs.eq( 1 )
-            ]
-          with m.Else():
-            m.d.sync += [
-              diva.eq( self.a ),
-              divb.eq( self.b ),
-              divs.eq( 0 )
-            ]
-          m.next = "ALU_BUSY"
-        with m.Else():
-          m.d.sync += self.done.eq( 1 )
-      with m.State( "ALU_BUSY" ):
-        # Set shared 'end of operation' values for the next cycle.
-        m.next = "ALU_IDLE"
-        m.d.comb += busy.eq( 0 )
-        m.d.sync += self.done.eq( 1 )
-        # Perform ALU computations based on the 'function' bits.
-        # Boolean unit (F = [...]):
-        #  - 0b101000: Y = A AND B
-        with m.If( fn == C_AND[ 0 ] ):
-          m.d.sync += self.y.eq( xa & xb )
-        #  - 0b101001: Y = A  OR B
-        with m.Elif( fn == C_OR[ 0 ] ):
-          m.d.sync += self.y.eq( xa | xb )
-        #  - 0b101010: Y = A XOR B
-        with m.Elif( fn == C_XOR[ 0 ] ):
-          m.d.sync += self.y.eq( xa ^ xb )
-        #  - 0b101011: Y = A XNOR B = NOT( A XOR B )
-        with m.Elif( fn == C_XNOR[ 0 ] ):
-          m.d.sync += self.y.eq( ~( xa ^ xb ) )
-        # Arithmetic unit (F = [...]):
-        #  - 0b100000: Y = A + B
-        with m.Elif( fn == C_ADD[ 0 ] ):
-          m.d.sync += self.y.eq( xa + xb )
-        #  - 0b100001: Y = A - B
-        with m.Elif( fn == C_SUB[ 0 ] ):
-          m.d.sync += self.y.eq( xa - xb )
-        #  - 0b100011: Y = A / B (wow, this is way easier than VHDL!)
-        with m.Elif( fn == C_DIV[ 0 ] ):
-          # (Return 0 if division by 0 occurs)
-          with m.If( xb == 0 ):
-            m.d.sync += self.y.eq( 0 )
-          with m.Elif( divs ):
-            m.d.sync += self.y.eq( ( diva // divb ) * -1 )
-          with m.Else():
-            m.d.sync += self.y.eq( diva // divb )
-        #  - 0b100010: Y = A * B
-        with m.Elif( fn == C_MUL[ 0 ] ):
-          m.d.sync += self.y.eq( xa * xb )
-        # Comparison unit (F = [...]):
-        #  - 0b100100: Y = ( A == B )
-        with m.Elif( fn == C_CEQ[ 0 ] ):
-          m.d.sync += self.y.eq( xa == xb )
-        #  - 0b100101: Y = ( A <  B )
-        with m.Elif( fn == C_CLT[ 0 ] ):
-          m.d.sync += self.y.eq( xa < xb )
-        #  - 0b100110: Y = ( A <= B )
-        with m.Elif( fn == C_CLE[ 0 ] ):
-          m.d.sync += self.y.eq( xa <= xb )
-        # Shift unit (F = [...]):
-        #  - 0b101100: Y = A << B
-        with m.Elif( fn == C_SHL[ 0 ] ):
-          m.d.sync += self.y.eq( xa << ub )
-        #  - 0b101101: Y = A >> B (no sign extend)
-        with m.Elif( fn == C_SHR[ 0 ] ):
-          m.d.sync += self.y.eq( ua >> ub )
-        #  - 0b101110: Y = A >> B (with sign extend)
-        with m.Elif( fn == C_SRA[ 0 ] ):
-          m.d.sync += self.y.eq( xa >> ub )
-        # Return 0 after one clock cycle for unrecognized commands.
-        with m.Else():
-          m.d.sync += self.y.eq( 0x00000000 )
+    # Perform ALU computations based on the 'function' bits.
+    # Boolean unit (F = [...]):
+    #  - 0b101000: Y = A AND B
+    with m.If( fn == C_AND[ 0 ] ):
+      m.d.comb += self.y.eq( xa & xb )
+    #  - 0b101001: Y = A  OR B
+    with m.Elif( fn == C_OR[ 0 ] ):
+      m.d.comb += self.y.eq( xa | xb )
+    #  - 0b101010: Y = A XOR B
+    with m.Elif( fn == C_XOR[ 0 ] ):
+      m.d.comb += self.y.eq( xa ^ xb )
+    #  - 0b101011: Y = A XNOR B = NOT( A XOR B )
+    with m.Elif( fn == C_XNOR[ 0 ] ):
+      m.d.comb += self.y.eq( ~( xa ^ xb ) )
+    # Arithmetic unit (F = [...]):
+    #  - 0b100000: Y = A + B
+    with m.Elif( fn == C_ADD[ 0 ] ):
+      m.d.comb += self.y.eq( xa + xb )
+    #  - 0b100001: Y = A - B
+    with m.Elif( fn == C_SUB[ 0 ] ):
+      m.d.comb += self.y.eq( xa - xb )
+    #  - 0b100011: Y = A / B (wow, this is way easier than VHDL!)
+    with m.Elif( fn == C_DIV[ 0 ] ):
+      # (Return 0 if division by 0 occurs)
+      with m.If( xb == 0 ):
+        m.d.comb += self.y.eq( 0 )
+      with m.Elif( divs ):
+        m.d.comb += self.y.eq( ( diva // divb ) * -1 )
+      with m.Else():
+        m.d.comb += self.y.eq( diva // divb )
+    #  - 0b100010: Y = A * B
+    with m.Elif( fn == C_MUL[ 0 ] ):
+      m.d.comb += self.y.eq( xa * xb )
+    # Comparison unit (F = [...]):
+    #  - 0b100100: Y = ( A == B )
+    with m.Elif( fn == C_CEQ[ 0 ] ):
+      m.d.comb += self.y.eq( xa == xb )
+    #  - 0b100101: Y = ( A <  B )
+    with m.Elif( fn == C_CLT[ 0 ] ):
+      m.d.comb += self.y.eq( xa < xb )
+    #  - 0b100110: Y = ( A <= B )
+    with m.Elif( fn == C_CLE[ 0 ] ):
+      m.d.comb += self.y.eq( xa <= xb )
+    # Shift unit (F = [...]):
+    #  - 0b101100: Y = A << B
+    with m.Elif( fn == C_SHL[ 0 ] ):
+      m.d.comb += self.y.eq( xa << ub )
+    #  - 0b101101: Y = A >> B (no sign extend)
+    with m.Elif( fn == C_SHR[ 0 ] ):
+      m.d.comb += self.y.eq( ua >> ub )
+    #  - 0b101110: Y = A >> B (with sign extend)
+    with m.Elif( fn == C_SRA[ 0 ] ):
+      m.d.comb += self.y.eq( xa >> ub )
+    # Return 0 after one clock cycle for unrecognized commands.
+    with m.Else():
+      m.d.comb += self.y.eq( 0x00000000 )
 
     # End of ALU module definition.
     return m
@@ -187,13 +174,11 @@ def alu_ut( alu, a, b, fn, expected ):
   yield alu.a.eq( a )
   yield alu.b.eq( b )
   yield alu.f.eq( fn[ 0 ] )
-  # Set 'start'
+  # Pulse 'start' with one intervening clock tick.
   yield alu.start.eq( 1 )
-  # Wait two ticks, clearing 'start' after one tick.
   yield Tick()
   yield alu.start.eq( 0 )
-  yield Tick()
-  # Done. Check the result after combinational logic settles.
+  # Done. Check the result after combinatorial logic settles.
   yield Settle()
   actual = yield alu.y
   if hexs( expected ) != hexs( actual ):

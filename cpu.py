@@ -15,12 +15,11 @@ from ram import *
 CPU_PC_LOAD      = 0
 CPU_PC_ROM_FETCH = 1
 CPU_PC_DECODE    = 2
-CPU_ALU_IN       = 4
-CPU_ALU_OUT      = 5
-CPU_LD           = 6
-CPU_ST           = 7
-CPU_PC_INCR      = 8
-CPU_STATES_MAX   = 8
+CPU_ALU_OUT      = 4
+CPU_LD           = 5
+CPU_ST           = 6
+CPU_PC_INCR      = 7
+CPU_STATES_MAX   = 7
 
 # CPU module.
 class CPU( Elaboratable ):
@@ -54,27 +53,29 @@ class CPU( Elaboratable ):
   def alu_reg_op( self, cpu, ra, rb, op ):
     # TODO: Signals are not hashable, so 'ALU_OPS[ op ]' doesn't work
     # I can come up with a better way to handle these signals...
-    cpu.d.sync += self.alu.f.eq( op )
+    cpu.d.comb += [
+      self.alu.start.eq( 1 ),
+      self.alu.f.eq( op )
+    ]
     for i in range( 32 ):
       with cpu.If( ra == i ):
-        cpu.d.sync += self.alu.a.eq( self.r[ i ] )
+        cpu.d.comb += self.alu.a.eq( self.r[ i ] )
       with cpu.If( rb == i ):
-        cpu.d.sync += self.alu.b.eq( self.r[ i ] )
-    cpu.next = "CPU_ALU_IN"
+        cpu.d.comb += self.alu.b.eq( self.r[ i ] )
 
   # Helper method to define shared logic for 'Rc = Ra ? Immediate'
   # ALU operations such as 'ADDC', 'ANDC', 'CMPEQC', etc.
   def alu_imm_op( self, cpu, ra, imm, op ):
     # TODO: Signals are not hashable, so 'ALU_OPS[ op ]' doesn't work
     # I can come up with a better way to handle these signals...
-    cpu.d.sync += [
+    cpu.d.comb += [
       self.alu.f.eq( op & 0b101111 ),
-      self.alu.b.eq( imm )
+      self.alu.b.eq( imm ),
+      self.alu.start.eq( 1 )
     ]
     for i in range( 32 ):
       with cpu.If( ra == i ):
-        cpu.d.sync += self.alu.a.eq( self.r[ i ] )
-    cpu.next = "CPU_ALU_IN"
+        cpu.d.comb += self.alu.a.eq( self.r[ i ] )
 
   def elaborate( self, platform ):
     # Core CPU module.
@@ -105,8 +106,6 @@ class CPU( Elaboratable ):
       self.ram.ren.eq( 0 ),
       self.ram.wen.eq( 0 )
     ]
-    # Set the ALU's 'start' bit to 0 by default.
-    m.d.comb += self.alu.start.eq( 0 )
 
     # Main CPU FSM.
     with m.FSM() as fsm:
@@ -217,19 +216,14 @@ class CPU( Elaboratable ):
         # 'RC = Ra ? Rb' ALU operations:
         with m.Elif( opcode.bit_select( 4, 2 ) == 0b10 ):
           self.alu_reg_op( m, ra, rb, opcode )
+          m.next = "CPU_ALU_OUT"
         # 'RC = Ra ? Constant' ALU operations:
         with m.Elif( opcode.bit_select( 4, 2 ) == 0b11 ):
           self.alu_imm_op( m, ra, imm, opcode )
+          m.next = "CPU_ALU_OUT"
         # Move on to incrementing the PC for unrecognized operations.
         with m.Else():
           m.next = "CPU_PC_INCR"
-      # "ALU Input": Send a boolean / logical / arithmetic
-      #              operation result from the ALU.
-      with m.State( "CPU_ALU_IN" ):
-        m.d.comb += self.fsms.eq( CPU_ALU_IN ) #TODO: Remove
-        m.d.comb += self.alu.start.eq( 1 )
-        with m.If( self.alu.done == 0 ):
-          m.next = "CPU_ALU_OUT"
       # "ALU Output": Store a boolean / logical / arithmetic
       #               operation result from the ALU.
       with m.State( "CPU_ALU_OUT" ):
