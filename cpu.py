@@ -408,3 +408,4 @@ if __name__ == "__main__":
   cpu_sim( quick_test )
   # Simulate the programs which test individual operations.
   cpu_sim( add_test )
+  cpu_sim( sub_test )

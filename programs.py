@@ -87,13 +87,38 @@ add_rom = ROM( [
   ADD( 10, 9, 8 ), ADD( 11, 8, 9 ),
   # r12 = max + max (= -2), r13 = min + min (= 0)
   ADD( 12, 8, 8 ), ADD( 13, 9, 9 ),
-  # r14 = min + 1 (= 0x80000001), r15 = min - 1 (= max)
+  # r14 = min + 1 (= 0x80000001), r15 = min + -1 (= max)
   ADDC( 14, 9, 1 ), ADDC( 15, 9, -1 ),
-  # r16 = max + 1 (= min), r17 = max - 1 (= 0x7FFFFFFE)
+  # r16 = max + 1 (= min), r17 = max + -1 (= 0x7FFFFFFE)
   ADDC( 16, 8, 1 ), ADDC( 17, 8, -1 ),
   # r18 = 42, r19 = 82, r20 = 999
   ADDC( 18, 4, 44 ), ADD( 19, 18, 18 ),
   ADD( 19, 19, 4 ), ADDC( 20, 19, 917 ),
+  # Done; infinite loop. (r28 = jump address, r29 = r28 + 4)
+  LDR( 28, 0x0000 ), JMP( 29, 28 )
+] )
+
+# "Subtraction test" program: check that the 'SUB' and 'SUBC'
+# operations work correctly.
+sub_rom = ROM( [
+  # r0 = 0 - 1 (= -1), r1 = r0 - 8 (= -9), r2 = r1 - -12 (= 3)
+  SUBC( 0, 31, 1 ), SUBC( 1, 0, 8 ), SUBC( 2, 1, -12 ),
+  # r3 = r0 - r0 (= 0), r4 = r1 - -12 (= 3)
+  SUB( 3, 0, 0 ), SUBC( 4, 1, -12 ),
+  # r5 = r0 - -32768 (= 32767), r6 = r5 - 32767 (= 0)
+  SUBC( 5, 0, 0x8000 ), SUBC( 6, 5, 0x7FFF ),
+  # r7 = min, r8 = max.
+  SHRC( 8, 0, 1 ), XOR( 7, 8, 0 ),
+  # r9 = min - max (=), r10 = max - min (=)
+  SUB( 9, 7, 8 ), SUB( 10, 8, 7 ),
+  # r11 = max - max (= 0), r12 = min - min (= 0)
+  SUB( 11, 8, 8 ), SUB( 12, 7, 7 ),
+  # r13 = min - 1 (= -1), r14 = max - 1 (=)
+  SUBC( 13, 7, 1 ), SUBC( 14, 8, 1 ),
+  # r15 = min - -1 (=), r16 = max - -1 (=)
+  SUBC( 15, 7, -1 ), SUBC( 16, 8, -1 ),
+  # r17 = 42, r18 = -84, r19 = 999
+  SUBC( 17, 2, -39 ), SUBC( 18, 17, 126 ), SUBC( 19, 5, 31768 ),
   # Done; infinite loop. (r28 = jump address, r29 = r28 + 4)
   LDR( 28, 0x0000 ), JMP( 29, 28 )
 ] )
@@ -219,7 +244,6 @@ quick_exp = {
 }
 
 # Expected runtime values for the addition test program.
-# TODO: N/Z/V flag checks.
 add_exp = {
   # The first 8 add operations should set: r0 = 1, r1 = 2, r2 = 5,
   # r3 = 3, r4 = -2, r5 = 32768, r6 = 0, r7 = 65536.
@@ -250,6 +274,37 @@ add_exp = {
   'end': 25
 }
 
+# Expected runtime values for the subtraction test program.
+sub_exp = {
+  # The first 7 add operations should set: r0 = -1, r1 = -2, r2 = 3,
+  # r3 = 0, r4 = 3, r5 = 32767, r6 = 0.
+  1:  [ { 'r': 0, 'e': -1, 'n': 1, 'z': 0, 'v': 0 } ],
+  2:  [ { 'r': 1, 'e': -9, 'n': 1, 'z': 0, 'v': 0 } ],
+  3:  [ { 'r': 2, 'e': 3, 'n': 0, 'z': 0, 'v': 0 } ],
+  4:  [ { 'r': 3, 'e': 0, 'n': 0, 'z': 1, 'v': 0 } ],
+  5:  [ { 'r': 4, 'e': 3, 'n': 0, 'z': 0, 'v': 0 } ],
+  6:  [ { 'r': 5, 'e': 0x7FFF, 'n': 0, 'z': 0, 'v': 0 } ],
+  7:  [ { 'r': 6, 'e': 0, 'n': 0, 'z': 1, 'v': 0 } ],
+  # The next 2 ops should set r7 = 0x80000000 and r8 = 0x7FFFFFFF.
+  8:  [ { 'r': 8, 'e': 0x7FFFFFFF, 'n': 0, 'z': 0, 'v': 0 } ],
+  9:  [ { 'r': 7, 'e': 0x80000000, 'n': 1, 'z': 0, 'v': 0 } ],
+  # The next 4 ops add (max/min) + (max/min) in r9-r12
+  10: [ { 'r': 9, 'e': 1, 'n': 0, 'z': 0, 'v': 1 } ],
+  11: [ { 'r': 10, 'e': -1, 'n': 1, 'z': 0, 'v': 1 } ],
+  12: [ { 'r': 11, 'e': 0, 'n': 0, 'z': 1, 'v': 0 } ],
+  13: [ { 'r': 12, 'e': 0, 'n': 0, 'z': 1, 'v': 0 } ],
+  # Then, min/max +/- 1 in r13-16.
+  14: [ { 'r': 13, 'e': 0x7FFFFFFF, 'n': 0, 'z': 0, 'v': 1 } ],
+  15: [ { 'r': 14, 'e': 0x7FFFFFFE, 'n': 0, 'z': 0, 'v': 0 } ],
+  16: [ { 'r': 15, 'e': 0x80000001, 'n': 1, 'z': 0, 'v': 0 } ],
+  17: [ { 'r': 16, 'e': 0x80000000, 'n': 1, 'z': 0, 'v': 1 } ],
+  # A few more small-number checks.
+  18: [ { 'r': 17, 'e': 42, 'n': 0, 'z': 0, 'v': 0 } ],
+  19: [ { 'r': 18, 'e': -84, 'n': 1, 'z': 0, 'v': 0 } ],
+  20: [ { 'r': 19, 'e': 999, 'n': 0, 'z': 0, 'v': 0 } ],
+  'end': 20
+}
+
 ############################################
 # Collected definitions for test programs. #
 # These are just arrays with string names, #
@@ -259,3 +314,4 @@ add_exp = {
 loop_test  = [ 'inifinite loop test', 'cpu_loop', loop_rom, loop_exp ]
 quick_test = [ 'quick test', 'cpu_quick', quick_rom, quick_exp ]
 add_test   = [ 'addition test', 'cpu_add', add_rom, add_exp ]
+sub_test   = [ 'subtraction test', 'cpu_sub', sub_rom, sub_exp ]
