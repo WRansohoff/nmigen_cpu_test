@@ -123,6 +123,34 @@ sub_rom = ROM( [
   LDR( 28, 0x0000 ), JMP( 29, 28 )
 ] )
 
+# Boolean test program: check that 'AND', 'ANDC', 'OR', 'ORC',
+# 'XOR', 'XORC', 'XNOR', and 'XNORC' operations work correctly.
+bool_rom = ROM( [
+  # Initial values: r0 = 0xFFFFFFFF, r1 = 0x00000000, r2 = 0x5555AAAA
+  SUBC( 0, 31, 1 ), ADD( 1, 31, 31 ), ADDC( 2, 31, 0xAAAA ),
+  SHLC( 2, 2, 16 ), XORC( 2, 2, 0xAAAA ),
+  # r3 = 0x5555AAAA, r4 = 0x00000000
+  AND( 3, 0, 2 ), AND( 4, 1, 0 ),
+  # r5 = 0x5555AAAA, r6 = 0xFFFF8000, r7 = 0x00000001
+  ANDC( 5, 2, 0xAAAA ), ANDC( 6, 0, 0x8000 ), ANDC( 7, 0, 0x0001 ),
+  # r8 = 0x00000001, r9 = 0xFFFF8000, r10 = 0x5555AAAB
+  OR( 8, 7, 4 ), OR( 9, 4, 6 ), OR( 10, 5, 7 ),
+  # r11 = 0x00000000, r12 = 0x00001234, r13 = 0xFFFFCC00
+  OR( 11, 1, 1 ), ORC( 12, 4, 0x1234 ), ORC( 13, 4, 0xCC00 ),
+  # r14 = 0xAAAA5555, r15 = 0x00000000, r16 = 0x0000785A
+  XOR( 14, 5, 0 ), XOR( 15, 5, 5 ), XORC( 16, 0, 0x8765 ),
+  # r17 = 0xFFFFFFFF, r18 = 0x5555D231, r19 = 0xAAAA023C
+  XOR( 17, 5, 14 ), XOR( 18, 10, 16 ), XORC( 19, 18, 0xD00D ),
+  # r20 = 0x00000000, r21 = 0xAAAA023C, r22 = 0x5555FDC3
+  XNOR( 20, 18, 19 ), XNOR( 21, 0, 19 ), XNOR( 22, 1, 19 ),
+  # r23 = 0x, r24 = 0x
+  XNORC( 23, 21, 0xC001 ), XNORC( 24, 21, 0x1337 ),
+  # r25 = 0x, r26 = 0x
+  XNORC( 25, 0, 0x0000 ), XNORC ( 25, 0, 0xFFFF ),
+  # Done; infinite loop. (r28 = jump address, r29 = r28 + 4)
+  LDR( 28, 0x0000 ), JMP( 29, 28 )
+] )
+
 ########################################
 # Expected runtime register values for #
 # the CPU test programs defined above: #
@@ -305,6 +333,53 @@ sub_exp = {
   'end': 20
 }
 
+# Expected runtime values for the 'boolean operators' test program.
+bool_exp = {
+  # The first 5 operations set initial values.
+  5: [
+       { 'r': 0, 'e': 0xFFFFFFFF },
+       { 'r': 1, 'e': 0x00000000 },
+       { 'r': 2, 'e': 0x5555AAAA }
+     ],
+  # 5 AND operations set r3-r7.
+  10: [
+       { 'r': 3, 'e': 0x5555AAAA },
+       { 'r': 4, 'e': 0x00000000 },
+       { 'r': 5, 'e': 0x5555AAAA },
+       { 'r': 6, 'e': 0xFFFF8000 },
+       { 'r': 7, 'e': 0x00000001 }
+     ],
+  # 6 OR operations set r8-r13.
+  16: [
+        { 'r': 8,  'e': 0x00000001 },
+        { 'r': 9,  'e': 0xFFFF8000 },
+        { 'r': 10, 'e': 0x5555AAAB },
+        { 'r': 11, 'e': 0x00000000 },
+        { 'r': 12, 'e': 0x00001234 },
+        { 'r': 13, 'e': 0xFFFFCC00 }
+      ],
+  # 6 XOR operations set r14-r19.
+  24: [
+        { 'r': 14, 'e': 0xAAAA5555 },
+        { 'r': 15, 'e': 0x00000000 },
+        { 'r': 16, 'e': 0x0000789A },
+        { 'r': 17, 'e': 0xFFFFFFFF },
+        { 'r': 18, 'e': 0x5555D231 },
+        { 'r': 19, 'e': 0xAAAA023C }
+      ],
+  # Finally, 7 XNOR operations set r20-r26
+  31: [
+        { 'r': 20, 'e': 0x00002FF2 },
+        { 'r': 21, 'e': 0xAAAA023C },
+        { 'r': 22, 'e': 0x5555FDC3 },
+        { 'r': 23, 'e': 0xAAAA3DC2 },
+        { 'r': 24, 'e': 0x5555EEF4 },
+        { 'r': 25, 'e': 0xFFFFFFFF },
+        { 'r': 26, 'e': 0x00000000 }
+      ],
+  'end': 32
+}
+
 ############################################
 # Collected definitions for test programs. #
 # These are just arrays with string names, #
@@ -315,3 +390,4 @@ loop_test  = [ 'inifinite loop test', 'cpu_loop', loop_rom, loop_exp ]
 quick_test = [ 'quick test', 'cpu_quick', quick_rom, quick_exp ]
 add_test   = [ 'addition test', 'cpu_add', add_rom, add_exp ]
 sub_test   = [ 'subtraction test', 'cpu_sub', sub_rom, sub_exp ]
+bool_test  = [ 'boolean test', 'cpu_bool', bool_rom, bool_exp ]
