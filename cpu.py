@@ -310,42 +310,71 @@ def cpu_run( cpu, expected ):
           # Special case: program counter.
           if ex[ 'r' ] == 'pc':
             cpc = yield cpu.pc
-            if hexs( cpc ) == hexs( ex[ 'v' ] ):
+            if hexs( cpc ) == hexs( ex[ 'e' ] ):
               print( "  \033[32mPASS:\033[0m pc  == %s"
                      " after %d operations"
-                     %( hexs( ex[ 'v' ] ), ni ) )
+                     %( hexs( ex[ 'e' ] ), ni ) )
             else:
               print( "  \033[31mFAIL:\033[0m pc  == %s"
                      " after %d operations (got: %s)"
-                     %( hexs( ex[ 'v' ] ), ni, hexs( cpc ) ) )
+                     %( hexs( ex[ 'e' ] ), ni, hexs( cpc ) ) )
           # Special case: RAM data.
           elif type( ex[ 'r' ] ) == str and ex[ 'r' ][ 0:3 ] == "RAM":
             rama = int( ex[ 'r' ][ 3: ] )
             if ( rama % 4 ) != 0:
               print( "  \033[31mFAIL:\033[0m RAM == %s @ 0x%08X"
                      " after %d operations (mis-aligned address)"
-                     %( hexs( ex[ 'v' ] ), rama, ni ) )
+                     %( hexs( ex[ 'e' ] ), rama, ni ) )
             else:
               cpd = yield cpu.ram.data[ rama // 4 ]
-              if hexs( cpd ) == hexs( ex[ 'v' ] ):
+              if hexs( cpd ) == hexs( ex[ 'e' ] ):
                 print( "  \033[32mPASS:\033[0m RAM == %s @ 0x%08X"
                        " after %d operations"
-                       %( hexs( ex[ 'v' ] ), rama, ni ) )
+                       %( hexs( ex[ 'e' ] ), rama, ni ) )
               else:
                 print( "  \033[31mFAIL:\033[0m RAM == %s @ 0x%08X"
                        " after %d operations (got: %s)"
-                       %( hexs( ex[ 'v' ] ), rama, ni, hexs( cpd ) ) )
+                       %( hexs( ex[ 'e' ] ), rama, ni, hexs( cpd ) ) )
           # Numbered general-purpose registers.
           elif ex[ 'r' ] >= 0 and ex[ 'r' ] < 32:
             cr = yield cpu.r[ ex[ 'r' ] ]
-            if hexs( cr ) == hexs( ex[ 'v' ] ):
+            if hexs( cr ) == hexs( ex[ 'e' ] ):
               print( "  \033[32mPASS:\033[0m r%02d == %s"
                      " after %d operations"
-                     %( ex[ 'r' ], hexs( ex[ 'v' ] ), ni ) )
+                     %( ex[ 'r' ], hexs( ex[ 'e' ] ), ni ) )
             else:
               print( "  \033[31mFAIL:\033[0m r%02d == %s"
                      " after %d operations (got: %s)"
-                     %( ex[ 'r' ], hexs( ex[ 'v' ] ), ni, hexs( cr ) ) )
+                     %( ex[ 'r' ], hexs( ex[ 'e' ] ),
+                        ni, hexs( cr ) ) )
+          # Check arithmetic flags if requested.
+          # 'N' flag is set if the last result was negative.
+          if 'n' in ex:
+            cn = yield cpu.alu.n
+            if cn == ex[ 'n' ]:
+              print( "    \033[32mPASS:\033[0m ALU 'N' flag == %d"
+                     %( ex[ 'n' ] ) )
+            else:
+              print( "    \033[31mFAIL:\033[0m ALU 'N' flag == %d"
+                     " (got: %d)"%( ex[ 'n' ], cn ) )
+          # 'Z' flag is set if the last result was zero.
+          if 'z' in ex:
+            cz = yield cpu.alu.z
+            if cz == ex[ 'z' ]:
+              print( "    \033[32mPASS:\033[0m ALU 'Z' flag == %d"
+                     %( ex[ 'z' ] ) )
+            else:
+              print( "    \033[31mFAIL:\033[0m ALU 'Z' flag == %d"
+                     " (got: %d)"%( ex[ 'z' ], cz ) )
+          # 'V' flag is set if the last result overflowed.
+          if 'v' in ex:
+            cv = yield cpu.alu.v
+            if cv == ex[ 'v' ]:
+              print( "    \033[32mPASS:\033[0m ALU 'V' flag == %d"
+                     %( ex[ 'v' ] ) )
+            else:
+              print( "    \033[31mFAIL:\033[0m ALU 'V' flag == %d"
+                     " (got: %d)"%( ex[ 'v' ], cv ) )
     # Step the simulation.
     yield Tick()
 
