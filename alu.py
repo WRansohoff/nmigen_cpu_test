@@ -31,6 +31,14 @@ class ALU( Elaboratable ):
   def elaborate( self, platform ):
     # Core ALU module.
     m = Module()
+    # Define both positive- and negative-edge clock domains.
+    # TODO: If I try to use 'sync' for both domains, I get an error
+    # which says that the domain names and dictionary keys must match.
+    # But it would be nice to use both edges of one 'sync' domain...
+    clock = ClockDomain( "sync", clk_edge = "pos" )
+    nclock = ClockDomain( "nsync", clk_edge = "neg" )
+    m.domains += clock
+    m.domains += nclock
 
     # Internal 'busy' signal.
     busy = Signal()
@@ -45,9 +53,9 @@ class ALU( Elaboratable ):
     divb = Signal( shape = Shape( width = 32, signed = False ) )
     divs = Signal()
 
-    # Latch input values at rising clock edges if 'start' is set.
+    # Latch input values at falling clock edges if 'start' is set.
     with m.If( self.start ):
-      m.d.sync += [
+      m.d.nsync += [
         xa.eq( self.a ),
         xb.eq( self.b ),
         ua.eq( self.a ),
@@ -55,25 +63,25 @@ class ALU( Elaboratable ):
         fn.eq( self.f ),
       ]
       with m.If( ( self.b < 0 ) & ( self.a < 0 ) ):
-        m.d.sync += [
+        m.d.nsync += [
           diva.eq( -self.a ),
           divb.eq( -self.b ),
           divs.eq( 0 )
         ]
       with m.Elif( self.a < 0 ):
-        m.d.sync += [
+        m.d.nsync += [
           diva.eq( -self.a ),
           divb.eq( self.b ),
           divs.eq( 1 )
         ]
       with m.Elif( self.b < 0 ):
-        m.d.sync += [
+        m.d.nsync += [
           diva.eq( self.a ),
           divb.eq( -self.b ),
           divs.eq( 1 )
         ]
       with m.Else():
-        m.d.sync += [
+        m.d.nsync += [
           diva.eq( self.a ),
           divb.eq( self.b ),
           divs.eq( 0 )
@@ -382,5 +390,6 @@ if __name__ == "__main__":
     def proc():
       yield from alu_test( dut )
     sim.add_clock( 24e-6 )
+    sim.add_clock( 24e-6, domain = "nsync" )
     sim.add_sync_process( proc )
     sim.run()

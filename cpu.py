@@ -15,11 +15,10 @@ from ram import *
 CPU_PC_LOAD      = 0
 CPU_PC_ROM_FETCH = 1
 CPU_PC_DECODE    = 2
-CPU_ALU_OUT      = 4
-CPU_LD           = 5
-CPU_ST           = 6
-CPU_PC_INCR      = 7
-CPU_STATES_MAX   = 7
+CPU_LD           = 4
+CPU_ST           = 5
+CPU_PC_INCR      = 6
+CPU_STATES_MAX   = 6
 
 # CPU module.
 class CPU( Elaboratable ):
@@ -216,22 +215,20 @@ class CPU( Elaboratable ):
         # 'RC = Ra ? Rb' ALU operations:
         with m.Elif( opcode.bit_select( 4, 2 ) == 0b10 ):
           self.alu_reg_op( m, ra, rb, opcode )
-          m.next = "CPU_ALU_OUT"
+          for i in range( 30 ):
+            with m.If( rc == i ):
+              m.d.sync += self.r[ i ].eq( self.alu.y )
+          m.next = "CPU_PC_INCR"
         # 'RC = Ra ? Constant' ALU operations:
         with m.Elif( opcode.bit_select( 4, 2 ) == 0b11 ):
           self.alu_imm_op( m, ra, imm, opcode )
-          m.next = "CPU_ALU_OUT"
+          for i in range( 30 ):
+            with m.If( rc == i ):
+              m.d.sync += self.r[ i ].eq( self.alu.y )
+          m.next = "CPU_PC_INCR"
         # Move on to incrementing the PC for unrecognized operations.
         with m.Else():
           m.next = "CPU_PC_INCR"
-      # "ALU Output": Store a boolean / logical / arithmetic
-      #               operation result from the ALU.
-      with m.State( "CPU_ALU_OUT" ):
-        m.d.comb += self.fsms.eq( CPU_ALU_OUT ) #TODO: Remove
-        for i in range( 30 ):
-          with m.If( rc == i ):
-            m.d.sync += self.r[ i ].eq( self.alu.y )
-        m.next = "CPU_PC_INCR"
       # "Load state": Read ROM or RAM data.
       with m.State( "CPU_LD" ):
         m.d.comb += self.fsms.eq( CPU_LD ) #TODO: Remove
@@ -391,6 +388,7 @@ def cpu_sim( test ):
       print( "\033[35mDONE\033[0m running %s: executed %d instructions"
              %( test[ 0 ], test[ 3 ][ 'end' ] ) )
     sim.add_clock( 24e-6 )
+    sim.add_clock( 24e-6, domain = "nsync" )
     sim.add_sync_process( proc )
     sim.run()
 
