@@ -31,7 +31,7 @@ class ALU( Elaboratable ):
   def elaborate( self, platform ):
     # Core ALU module.
     m = Module()
-    # Define both positive- and negative-edge clock domains.
+    # Define positive- and negative-edge clock domains.
     # TODO: If I try to use 'sync' for both domains, I get an error
     # which says that the domain names and dictionary keys must match.
     # But it would be nice to use both edges of one 'sync' domain...

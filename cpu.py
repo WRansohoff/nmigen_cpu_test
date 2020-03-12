@@ -17,8 +17,7 @@ CPU_PC_ROM_FETCH = 1
 CPU_PC_DECODE    = 2
 CPU_LD           = 4
 CPU_ST           = 5
-CPU_PC_INCR      = 6
-CPU_STATES_MAX   = 6
+CPU_STATES_MAX   = 5
 
 # CPU module.
 class CPU( Elaboratable ):
@@ -84,13 +83,14 @@ class CPU( Elaboratable ):
     m.submodules.rom = self.rom
     m.submodules.ram = self.ram
 
-    # Intermediate instruction storage.
+    # Intermediate instruction and PC storage.
     opcode = Signal( 6, reset = 0b000000 )
     ra = Signal( 5, reset = 0b00000 )
     rb = Signal( 5, reset = 0b00000 )
     rc = Signal( 5, reset = 0b00000 )
     imm = Signal( shape = Shape( width = 32, signed = True ),
                   reset = 0x00000000 )
+    ipc = Signal( 32, reset = 0x00000000 )
 
     # r31 is hard-wired to 0.
     self.r[ 31 ].eq( 0x00000000 )
@@ -108,11 +108,6 @@ class CPU( Elaboratable ):
 
     # Main CPU FSM.
     with m.FSM() as fsm:
-      # "Load PC": Fetch the memory location in the program counter
-      #            from ROM, to prepare for decoding.
-      with m.State( "CPU_PC_LOAD" ):
-        m.d.comb += self.fsms.eq( CPU_PC_LOAD ) #TODO: Remove
-        m.next = "CPU_PC_ROM_FETCH"
       # "ROM Fetch": Wait for the instruction to load from ROM, and
       #              populate register fields to prepare for decoding.
       with m.State( "CPU_PC_ROM_FETCH" ):
@@ -125,7 +120,8 @@ class CPU( Elaboratable ):
           opcode.eq( self.rom.out.bit_select( 26, 6 ) ),
           rc.eq( self.rom.out.bit_select( 21, 5 ) ),
           ra.eq( self.rom.out.bit_select( 16, 5 ) ),
-          rb.eq( self.rom.out.bit_select( 11, 5 ) )
+          rb.eq( self.rom.out.bit_select( 11, 5 ) ),
+          ipc.eq( self.pc )
         ]
         m.next = "CPU_PC_DECODE"
       # "Decode PC": Figure out what sort of instruction to execute,
@@ -181,34 +177,34 @@ class CPU( Elaboratable ):
         with m.Elif( opcode == OP_JMP[ 0 ] ):
           for i in range( 32 ):
             with m.If( rc == i ):
-              m.d.sync += self.r[ i ].eq( self.pc + 4 )
+              m.d.sync += self.r[ i ].eq( ipc + 4 )
             with m.If( ra == i ):
-              m.d.sync += self.pc.eq( self.r[ i ] & 0xFFFFFFFC )
-          m.next = "CPU_PC_LOAD"
+              m.d.nsync += self.pc.eq( self.r[ i ] & 0xFFFFFFFC )
+          m.next = "CPU_PC_ROM_FETCH"
         # BEQ "Branch if EQual" operation: Place the next PC value in
         # Rc, then jump to (next PC + immediate) if Ra == 0.
         with m.Elif( opcode == OP_BEQ[ 0 ] ):
           for i in range( 32 ):
             with m.If( rc == i ):
-              m.d.sync += self.r[ i ].eq( self.pc + 4 )
+              m.d.sync += self.r[ i ].eq( ipc + 4 )
             with m.If( ra == i ):
               with m.If( self.r[ i ] ):
-                m.next = "CPU_PC_INCR"
-              with m.Else():
-                m.d.sync += self.pc.eq( self.pc + ( imm * 4 ) + 4 )
                 m.next = "CPU_PC_LOAD"
+              with m.Else():
+                m.d.nsync += self.pc.eq( self.pc + ( imm * 4 ) + 4 )
+                m.next = "CPU_PC_ROM_FETCH"
         # BNE "Branch if Not Equal" operation: Same as BEQ, but
         # perform the jump if Ra != 0 instead.
         with m.Elif( opcode == OP_BNE[ 0 ] ):
           for i in range( 32 ):
             with m.If( rc == i ):
-              m.d.sync += self.r[ i ].eq( self.pc + 4 )
+              m.d.sync += self.r[ i ].eq( ipc + 4 )
             with m.If( ra == i ):
               with m.If( self.r[ i ] ):
-                m.d.sync += self.pc.eq( self.pc + ( imm * 4 ) + 4 )
-                m.next = "CPU_PC_LOAD"
+                m.d.nsync += self.pc.eq( self.pc + ( imm * 4 ) + 4 )
+                m.next = "CPU_PC_ROM_FETCH"
               with m.Else():
-                m.next = "CPU_PC_INCR"
+                m.next = "CPU_PC_LOAD"
         # ALU instructions: ADD, AND, OR, XOR, XNOR, SUB, MUL, DIV,
         #                   SHL, SHR, SRA, CMPEQ, CMPLE, CMPLT.
         # (And the corresponding operations ending in 'C'.)
@@ -218,17 +214,17 @@ class CPU( Elaboratable ):
           for i in range( 30 ):
             with m.If( rc == i ):
               m.d.sync += self.r[ i ].eq( self.alu.y )
-          m.next = "CPU_PC_INCR"
+          m.next = "CPU_PC_LOAD"
         # 'RC = Ra ? Constant' ALU operations:
         with m.Elif( opcode.bit_select( 4, 2 ) == 0b11 ):
           self.alu_imm_op( m, ra, imm, opcode )
           for i in range( 30 ):
             with m.If( rc == i ):
               m.d.sync += self.r[ i ].eq( self.alu.y )
-          m.next = "CPU_PC_INCR"
+          m.next = "CPU_PC_LOAD"
         # Move on to incrementing the PC for unrecognized operations.
         with m.Else():
-          m.next = "CPU_PC_INCR"
+          m.next = "CPU_PC_LOAD"
       # "Load state": Read ROM or RAM data.
       with m.State( "CPU_LD" ):
         m.d.comb += self.fsms.eq( CPU_LD ) #TODO: Remove
@@ -250,7 +246,7 @@ class CPU( Elaboratable ):
               m.d.sync += self.r[ i ].eq( self.rom.out )
             with m.Else():
               m.d.sync += self.r[ i ].eq( 0x00000000 )
-        m.next = "CPU_PC_INCR"
+        m.next = "CPU_PC_LOAD"
       # Store state": Write RAM data.
       with m.State( "CPU_ST" ):
         m.d.comb += self.fsms.eq( CPU_ST ) #TODO: Remove
@@ -263,13 +259,11 @@ class CPU( Elaboratable ):
                 self.ram.addr.eq( self.mp & 0x1FFFFFFF ),
                 self.ram.wen.eq( 0b1 )
               ]
-        m.next = "CPU_PC_INCR"
-      # "Store state": Write RAM data.
-      # "Increment PC": Increment the program counter by one word.
-      with m.State( "CPU_PC_INCR" ):
-        m.d.comb += self.fsms.eq( CPU_PC_INCR ) #TODO: Remove
-        m.d.sync += self.pc.eq( self.pc + 4 )
         m.next = "CPU_PC_LOAD"
+      with m.State( "CPU_PC_LOAD" ):
+        m.d.comb += self.fsms.eq( CPU_PC_LOAD ) # TODO: Remove
+        m.d.nsync += self.pc.eq( self.pc + 4 )
+        m.next = "CPU_PC_ROM_FETCH"
     
     # End of CPU module definition.
     return m
@@ -281,11 +275,88 @@ class CPU( Elaboratable ):
 # Import test programs and expected runtime register values.
 from programs import *
 
+# Helper method to check expected CPU register / memory values
+# at a specific point during a test program.
+def check_vals( expected, ni, cpu ):
+  if ni in expected:
+    for j in range( len( expected[ ni ] ) ):
+      ex = expected[ ni ][ j ]
+      # Special case: program counter.
+      if ex[ 'r' ] == 'pc':
+        cpc = yield cpu.pc
+        if hexs( cpc ) == hexs( ex[ 'e' ] ):
+          print( "  \033[32mPASS:\033[0m pc  == %s"
+                 " after %d operations"
+                 %( hexs( ex[ 'e' ] ), ni ) )
+        else:
+          print( "  \033[31mFAIL:\033[0m pc  == %s"
+                 " after %d operations (got: %s)"
+                 %( hexs( ex[ 'e' ] ), ni, hexs( cpc ) ) )
+      # Special case: RAM data.
+      elif type( ex[ 'r' ] ) == str and ex[ 'r' ][ 0:3 ] == "RAM":
+        rama = int( ex[ 'r' ][ 3: ] )
+        if ( rama % 4 ) != 0:
+          print( "  \033[31mFAIL:\033[0m RAM == %s @ 0x%08X"
+                 " after %d operations (mis-aligned address)"
+                 %( hexs( ex[ 'e' ] ), rama, ni ) )
+        else:
+          cpd = yield cpu.ram.data[ rama // 4 ]
+          if hexs( cpd ) == hexs( ex[ 'e' ] ):
+            print( "  \033[32mPASS:\033[0m RAM == %s @ 0x%08X"
+                   " after %d operations"
+                   %( hexs( ex[ 'e' ] ), rama, ni ) )
+          else:
+            print( "  \033[31mFAIL:\033[0m RAM == %s @ 0x%08X"
+                   " after %d operations (got: %s)"
+                   %( hexs( ex[ 'e' ] ), rama, ni, hexs( cpd ) ) )
+      # Numbered general-purpose registers.
+      elif ex[ 'r' ] >= 0 and ex[ 'r' ] < 32:
+        cr = yield cpu.r[ ex[ 'r' ] ]
+        if hexs( cr ) == hexs( ex[ 'e' ] ):
+          print( "  \033[32mPASS:\033[0m r%02d == %s"
+                 " after %d operations"
+                 %( ex[ 'r' ], hexs( ex[ 'e' ] ), ni ) )
+        else:
+          print( "  \033[31mFAIL:\033[0m r%02d == %s"
+                 " after %d operations (got: %s)"
+                 %( ex[ 'r' ], hexs( ex[ 'e' ] ),
+                    ni, hexs( cr ) ) )
+      # Check arithmetic flags if requested.
+      # 'N' flag is set if the last result was negative.
+      if 'n' in ex:
+        cn = yield cpu.alu.n
+        if cn == ex[ 'n' ]:
+          print( "    \033[32mPASS:\033[0m ALU 'N' flag == %d"
+                 %( ex[ 'n' ] ) )
+        else:
+          print( "    \033[31mFAIL:\033[0m ALU 'N' flag == %d"
+                 " (got: %d)"%( ex[ 'n' ], cn ) )
+      # 'Z' flag is set if the last result was zero.
+      if 'z' in ex:
+        cz = yield cpu.alu.z
+        if cz == ex[ 'z' ]:
+          print( "    \033[32mPASS:\033[0m ALU 'Z' flag == %d"
+                 %( ex[ 'z' ] ) )
+        else:
+          print( "    \033[31mFAIL:\033[0m ALU 'Z' flag == %d"
+                 " (got: %d)"%( ex[ 'z' ], cz ) )
+      # 'V' flag is set if the last result overflowed.
+      if 'v' in ex:
+        cv = yield cpu.alu.v
+        if cv == ex[ 'v' ]:
+          print( "    \033[32mPASS:\033[0m ALU 'V' flag == %d"
+                 %( ex[ 'v' ] ) )
+        else:
+          print( "    \033[31mFAIL:\033[0m ALU 'V' flag == %d"
+                 " (got: %d)"%( ex[ 'v' ], cv ) )
+
 # Helper method to run a CPU device for a given number of cycles,
 # and verify its expected register values over time.
 def cpu_run( cpu, expected ):
   # Record how many CPU instructions have executed.
-  ni = -1
+  ni = 0
+  # Check initial values, if any.
+  yield from check_vals( expected, 0, cpu )
   # Let the CPU run for N ticks.
   while ni <= expected[ 'end' ]:
     # Let combinational logic settle before checking values.
@@ -294,78 +365,8 @@ def cpu_run( cpu, expected ):
     fsm_state = yield cpu.fsms
     if fsm_state == CPU_PC_ROM_FETCH:
       ni += 1
-      # Check 'expected' values, if any.
-      if ni in expected:
-        for j in range( len( expected[ ni ] ) ):
-          ex = expected[ ni ][ j ]
-          # Special case: program counter.
-          if ex[ 'r' ] == 'pc':
-            cpc = yield cpu.pc
-            if hexs( cpc ) == hexs( ex[ 'e' ] ):
-              print( "  \033[32mPASS:\033[0m pc  == %s"
-                     " after %d operations"
-                     %( hexs( ex[ 'e' ] ), ni ) )
-            else:
-              print( "  \033[31mFAIL:\033[0m pc  == %s"
-                     " after %d operations (got: %s)"
-                     %( hexs( ex[ 'e' ] ), ni, hexs( cpc ) ) )
-          # Special case: RAM data.
-          elif type( ex[ 'r' ] ) == str and ex[ 'r' ][ 0:3 ] == "RAM":
-            rama = int( ex[ 'r' ][ 3: ] )
-            if ( rama % 4 ) != 0:
-              print( "  \033[31mFAIL:\033[0m RAM == %s @ 0x%08X"
-                     " after %d operations (mis-aligned address)"
-                     %( hexs( ex[ 'e' ] ), rama, ni ) )
-            else:
-              cpd = yield cpu.ram.data[ rama // 4 ]
-              if hexs( cpd ) == hexs( ex[ 'e' ] ):
-                print( "  \033[32mPASS:\033[0m RAM == %s @ 0x%08X"
-                       " after %d operations"
-                       %( hexs( ex[ 'e' ] ), rama, ni ) )
-              else:
-                print( "  \033[31mFAIL:\033[0m RAM == %s @ 0x%08X"
-                       " after %d operations (got: %s)"
-                       %( hexs( ex[ 'e' ] ), rama, ni, hexs( cpd ) ) )
-          # Numbered general-purpose registers.
-          elif ex[ 'r' ] >= 0 and ex[ 'r' ] < 32:
-            cr = yield cpu.r[ ex[ 'r' ] ]
-            if hexs( cr ) == hexs( ex[ 'e' ] ):
-              print( "  \033[32mPASS:\033[0m r%02d == %s"
-                     " after %d operations"
-                     %( ex[ 'r' ], hexs( ex[ 'e' ] ), ni ) )
-            else:
-              print( "  \033[31mFAIL:\033[0m r%02d == %s"
-                     " after %d operations (got: %s)"
-                     %( ex[ 'r' ], hexs( ex[ 'e' ] ),
-                        ni, hexs( cr ) ) )
-          # Check arithmetic flags if requested.
-          # 'N' flag is set if the last result was negative.
-          if 'n' in ex:
-            cn = yield cpu.alu.n
-            if cn == ex[ 'n' ]:
-              print( "    \033[32mPASS:\033[0m ALU 'N' flag == %d"
-                     %( ex[ 'n' ] ) )
-            else:
-              print( "    \033[31mFAIL:\033[0m ALU 'N' flag == %d"
-                     " (got: %d)"%( ex[ 'n' ], cn ) )
-          # 'Z' flag is set if the last result was zero.
-          if 'z' in ex:
-            cz = yield cpu.alu.z
-            if cz == ex[ 'z' ]:
-              print( "    \033[32mPASS:\033[0m ALU 'Z' flag == %d"
-                     %( ex[ 'z' ] ) )
-            else:
-              print( "    \033[31mFAIL:\033[0m ALU 'Z' flag == %d"
-                     " (got: %d)"%( ex[ 'z' ], cz ) )
-          # 'V' flag is set if the last result overflowed.
-          if 'v' in ex:
-            cv = yield cpu.alu.v
-            if cv == ex[ 'v' ]:
-              print( "    \033[32mPASS:\033[0m ALU 'V' flag == %d"
-                     %( ex[ 'v' ] ) )
-            else:
-              print( "    \033[31mFAIL:\033[0m ALU 'V' flag == %d"
-                     " (got: %d)"%( ex[ 'v' ], cv ) )
+      # Check expected values, if any.
+      yield from check_vals( expected, ni, cpu )
     # Step the simulation.
     yield Tick()
 

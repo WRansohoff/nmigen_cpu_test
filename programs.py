@@ -95,7 +95,7 @@ add_rom = ROM( [
   ADDC( 18, 4, 44 ), ADD( 19, 18, 18 ),
   ADD( 19, 19, 4 ), ADDC( 20, 19, 917 ),
   # Done; infinite loop. (r28 = jump address, r29 = r28 + 4)
-  LDR( 28, 0x0000 ), JMP( 29, 28 )
+  BNE( 28, 31, 0 ), JMP( 29, 28 )
 ] )
 
 # "Subtraction test" program: check that the 'SUB' and 'SUBC'
@@ -120,7 +120,7 @@ sub_rom = ROM( [
   # r17 = 42, r18 = -84, r19 = 999
   SUBC( 17, 2, -39 ), SUBC( 18, 17, 126 ), SUBC( 19, 5, 31768 ),
   # Done; infinite loop. (r28 = jump address, r29 = r28 + 4)
-  LDR( 28, 0x0000 ), JMP( 29, 28 )
+  BNE( 28, 31, 0 ), JMP( 29, 28 )
 ] )
 
 # Boolean test program: check that 'AND', 'ANDC', 'OR', 'ORC',
@@ -148,7 +148,7 @@ bool_rom = ROM( [
   # r25 = 0x, r26 = 0x
   XNORC( 25, 0, 0x0000 ), XNORC ( 25, 0, 0xFFFF ),
   # Done; infinite loop. (r28 = jump address, r29 = r28 + 4)
-  LDR( 28, 0x0000 ), JMP( 29, 28 )
+  BNE( 28, 31, 0 ), JMP( 29, 28 )
 ] )
 
 # Comparison test program: check that 'CMPEQ', 'CMPLE', 'CMPLT'
@@ -188,7 +188,7 @@ cmp_rom = ROM( [
   # r28 = 0, r29 = 0
   CMPLTC( 28, 0, 2 ), CMPLTC( 29, 3, -7 ),
   # Done; infinite loop. (r28 = jump address, r29 = r28 + 4)
-  LDR( 28, 0x0000 ), JMP( 29, 28 )
+  BNE( 28, 31, 0 ), JMP( 29, 28 )
 ] )
 
 # Branch and jump test program: check that 'BEQ', 'BNE', and 'JMP'
@@ -205,7 +205,7 @@ jmp_rom = ROM( [
   BNE( 7, 1, 2 ), 0xDEADBEEF, 0xDEADBEEF,
   # Jump forward, then back, then forward.
   BNE( 8, 31, 1 ), ADDC( 9, 8, 0x0014 ), ADDC( 10, 8, 0x0028 ),
-  ADDC( 11, 8, 0x0010 ), JMP( 12, 9 ), JMP( 12, 10 ), JMP( 12, 11 ),
+  ADDC( 11, 8, 0x0010 ), JMP( 12, 9 ), JMP( 14, 10 ), JMP( 13, 11 ),
   # Dummy data that should be jumped over.
   0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF,
   # Done; infinite loop. (r28 = jump address, r29 = r28 + 4)
@@ -480,15 +480,15 @@ jmp_exp = {
   # First two instructions set initial values.
   2: [ { 'r': 0, 'e': 1 }, { 'r': 1, 'e': -1 } ],
   # The next two 'BEQ' instructions should not be taken.
-  3: [ { 'r': 'pc', 'e': 0x0000000C } ],
-  4: [ { 'r': 'pc', 'e': 0x00000010 } ],
+  3: [ { 'r': 'pc', 'e': 0x0000000C }, { 'r': 2, 'e': 0x0000000C } ],
+  4: [ { 'r': 'pc', 'e': 0x00000010 }, { 'r': 3, 'e': 0x00000010 } ],
   # But the third 'BEQ' should skip ahead.
-  5: [ { 'r': 'pc', 'e': 0x0000001C } ],
+  5: [ { 'r': 'pc', 'e': 0x0000001C }, { 'r': 4, 'e': 0x00000014 } ],
   # The first 'BNE' should not be taken.
-  6: [ { 'r': 'pc', 'e': 0x00000020 } ],
+  6: [ { 'r': 'pc', 'e': 0x00000020 }, { 'r': 5, 'e': 0x00000020 } ],
   # But the second two 'BNE's should skip ahead.
-  7: [ { 'r': 'pc', 'e': 0x0000002C } ],
-  8: [ { 'r': 'pc', 'e': 0x00000038 } ],
+  7: [ { 'r': 'pc', 'e': 0x0000002C }, { 'r': 6, 'e': 0x00000024 } ],
+  8: [ { 'r': 'pc', 'e': 0x00000038 }, { 'r': 7, 'e': 0x00000030 } ],
   # The next 4 instructions generate PC addresses to jump between.
   12: [
         { 'r':  8, 'e': 0x0000003C },
@@ -497,13 +497,13 @@ jmp_exp = {
         { 'r': 11, 'e': 0x0000004C }
       ],
   # The next 3 jumps should skip forwards, back, forwards.
-  13: [ { 'r': 'pc', 'e': 0x00000050 } ],
-  14: [ { 'r': 'pc', 'e': 0x0000004C } ],
-  15: [ { 'r': 'pc', 'e': 0x00000064 } ],
+  13: [ { 'r': 'pc', 'e': 0x00000050 }, { 'r': 12, 'e': 0x00000004C } ],
+  14: [ { 'r': 'pc', 'e': 0x0000004C }, { 'r': 13, 'e': 0x000000054 } ],
+  15: [ { 'r': 'pc', 'e': 0x00000064 }, { 'r': 14, 'e': 0x000000050 } ],
   # Finally, there's an infinite loop.
-  16: [ { 'r': 'pc', 'e': 0x00000068 } ],
-  17: [ { 'r': 'pc', 'e': 0x00000068 } ],
-  20: [ { 'r': 'pc', 'e': 0x00000068 } ],
+  16: [ { 'r': 'pc', 'e': 0x00000068 }, { 'r': 29, 'e': 0x00000000 } ],
+  17: [ { 'r': 'pc', 'e': 0x00000068 }, { 'r': 29, 'e': 0x0000006C } ],
+  20: [ { 'r': 'pc', 'e': 0x00000068 }, { 'r': 29, 'e': 0x0000006C } ],
   'end': 20
 }
 
