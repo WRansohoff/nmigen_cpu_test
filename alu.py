@@ -40,8 +40,6 @@ class ALU( Elaboratable ):
     m.domains += clock
     m.domains += nclock
 
-    # Internal 'busy' signal.
-    busy = Signal()
     # Latched input values for signed and unsigned operations.
     xa   = Signal( shape = Shape( width = 32, signed = True ) )
     xb   = Signal( shape = Shape( width = 32, signed = True ) )
