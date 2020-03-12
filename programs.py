@@ -191,6 +191,27 @@ cmp_rom = ROM( [
   LDR( 28, 0x0000 ), JMP( 29, 28 )
 ] )
 
+# Branch and jump test program: check that 'BEQ', 'BNE', and 'JMP'
+# operations work correctly.
+jmp_rom = ROM( [
+  # Load initial values: r0 = 1, r1 = -1
+  ADDC( 0, 31, 1 ), SUBC( 1, 31, 1 ),
+  # BEQ tests: first two branches shouldn't be taken, third should.
+  BEQ( 2, 0, -1 ), BEQ( 3, 1, -1 ), BEQ( 4, 31, 2 ),
+  # (PC should skip over this dummy data.)
+  0xDEADBEEF, 0xDEADBEEF,
+  # BNE tests: first branch shouldn't be taken, third should.
+  BNE( 5, 31, -1 ), BNE( 6, 0, 2 ), 0xDEADBEEF, 0xDEADBEEF,
+  BNE( 7, 1, 2 ), 0xDEADBEEF, 0xDEADBEEF,
+  # Jump forward, then back, then forward.
+  BNE( 8, 31, 1 ), ADDC( 9, 8, 0x0014 ), ADDC( 10, 8, 0x0028 ),
+  ADDC( 11, 8, 0x0010 ), JMP( 12, 9 ), JMP( 12, 10 ), JMP( 12, 11 ),
+  # Dummy data that should be jumped over.
+  0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF,
+  # Done; infinite loop. (r28 = jump address, r29 = r28 + 4)
+  BNE( 28, 31, 0 ), JMP( 29, 28 )
+] )
+
 ########################################
 # Expected runtime register values for #
 # the CPU test programs defined above: #
@@ -454,6 +475,38 @@ cmp_exp = {
   'end': 50
 }
 
+# Expected runtime values for the 'branch / jump' test program.
+jmp_exp = {
+  # First two instructions set initial values.
+  2: [ { 'r': 0, 'e': 1 }, { 'r': 1, 'e': -1 } ],
+  # The next two 'BEQ' instructions should not be taken.
+  3: [ { 'r': 'pc', 'e': 0x0000000C } ],
+  4: [ { 'r': 'pc', 'e': 0x00000010 } ],
+  # But the third 'BEQ' should skip ahead.
+  5: [ { 'r': 'pc', 'e': 0x0000001C } ],
+  # The first 'BNE' should not be taken.
+  6: [ { 'r': 'pc', 'e': 0x00000020 } ],
+  # But the second two 'BNE's should skip ahead.
+  7: [ { 'r': 'pc', 'e': 0x0000002C } ],
+  8: [ { 'r': 'pc', 'e': 0x00000038 } ],
+  # The next 4 instructions generate PC addresses to jump between.
+  12: [
+        { 'r':  8, 'e': 0x0000003C },
+        { 'r':  9, 'e': 0x00000050 },
+        { 'r': 10, 'e': 0x00000064 },
+        { 'r': 11, 'e': 0x0000004C }
+      ],
+  # The next 3 jumps should skip forwards, back, forwards.
+  13: [ { 'r': 'pc', 'e': 0x00000050 } ],
+  14: [ { 'r': 'pc', 'e': 0x0000004C } ],
+  15: [ { 'r': 'pc', 'e': 0x00000064 } ],
+  # Finally, there's an infinite loop.
+  16: [ { 'r': 'pc', 'e': 0x00000068 } ],
+  17: [ { 'r': 'pc', 'e': 0x00000068 } ],
+  20: [ { 'r': 'pc', 'e': 0x00000068 } ],
+  'end': 20
+}
+
 ############################################
 # Collected definitions for test programs. #
 # These are just arrays with string names, #
@@ -466,3 +519,4 @@ add_test   = [ 'addition test', 'cpu_add', add_rom, add_exp ]
 sub_test   = [ 'subtraction test', 'cpu_sub', sub_rom, sub_exp ]
 bool_test  = [ 'boolean test', 'cpu_bool', bool_rom, bool_exp ]
 cmp_test  = [ 'comparison test', 'cpu_cmp', cmp_rom, cmp_exp ]
+jmp_test  = [ 'branch / jump test', 'cpu_jmp', jmp_rom, jmp_exp ]

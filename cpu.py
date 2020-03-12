@@ -403,3 +403,4 @@ if __name__ == "__main__":
   cpu_sim( sub_test )
   cpu_sim( bool_test )
   cpu_sim( cmp_test )
+  cpu_sim( jmp_test )
