@@ -1,6 +1,6 @@
 # Simple nMigen CPU
 
-This is a work-in-progress nMigen implementation of the educational RISC computer which is used to teach MIT's edX 6004.2x free online course.
+This is a basic nMigen implementation of the educational RISC computer which is used to teach MIT's edX 6004.2x free online course.
 
 I've been brushing up on digital logic since it's been a few years since college and I want to design a minimal implementation of the RISC-V ISA without going crawling back to Verilog or VHDL. So I figured I'd follow along with some online classes using nMigen alongside the provided simulators as a learning exercise.
 
@@ -43,6 +43,6 @@ The result waveforms are saved in a `.vcd` file with the same name as the `.py` 
 
 The CPU module is a bit more complicated than its submodules, so running the `cpu.py` file will run a series of test applications on the simulated CPU, each with its own `cpu_*.vcd` result file.
 
-I haven't implemented a 'reset' signal for the CPU yet, and I don't have a good way to swap out the ROM modules once the simulated device object is instantiated. So for now, each test application creates a new CPU device and simulation.
+There are some basic tests covering every instruction except for division and multiplication, which I skipped since those operations are not part of the base `RV32I` instruction set. I guess I'll 
 
-There are only two very simple test programs right now, but I would like to add more comprehensive tests for each individual instruction before I call it a day and fork this project to implement the RISC-V ISA.
+I haven't implemented a 'reset' signal for this CPU, and I don't have a good way to swap out the ROM modules once the simulated device object is instantiated. So for now, each test application creates a new CPU device and simulation. But it looks like nMigen automatically implements a 'reset' signal for each module which can bring every `Signal`s to its `reset` value (unless their `reset_less` attribute is set), so it's probably possible to simplify things.

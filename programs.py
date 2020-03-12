@@ -191,6 +191,23 @@ cmp_rom = ROM( [
   BNE( 28, 31, 0 ), JMP( 29, 28 )
 ] )
 
+# Bit-shift test program: check that 'SHL', 'SHR', 'SRA'
+# operations work correctly.
+shift_rom = ROM( [
+  # Set initial values: r0 = 1, r1 = -1.
+  ADDC( 0, 31, 1 ), SUBC( 1, 31, 1 ),
+  # r2 = 2, r3 = 8, r4 = min
+  SHLC( 2, 0, 1 ), SHLC( 3, 0, 3 ), SHLC( 4, 0, 31 ),
+  # r5 = min, r6 = -2, r7 = 0x00000100
+  SHLC( 5, 1, 31 ), SHLC( 6, 1, 1 ), SHL( 7, 0, 3 ),
+  # r8 = 0, r9 = 0x0000FFFF, r10 = 0x00800000
+  SHR( 8, 0, 0 ), SHRC( 9, 1, 16 ), SHRC( 10, 5, 8 ),
+  # r11 = 0, r12 = 0xFFFFFFFF, r13 = 0xFF800000
+  SRA( 11, 0, 0 ), SRAC( 12, 1, 16 ), SRAC( 13, 5, 8 ),
+  # Done; infinite loop. (r28 = jump address, r29 = r28 + 4)
+  BNE( 28, 31, 0 ), JMP( 29, 28 )
+] )
+
 # Branch and jump test program: check that 'BEQ', 'BNE', and 'JMP'
 # operations work correctly.
 jmp_rom = ROM( [
@@ -208,6 +225,32 @@ jmp_rom = ROM( [
   ADDC( 11, 8, 0x0010 ), JMP( 12, 9 ), JMP( 14, 10 ), JMP( 13, 11 ),
   # Dummy data that should be jumped over.
   0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF,
+  # Done; infinite loop. (r28 = jump address, r29 = r28 + 4)
+  BNE( 28, 31, 0 ), JMP( 29, 28 )
+] )
+
+# Load/store test program: check that 'LD', 'LDR', and 'ST'
+# operations work correctly.
+ls_rom = ROM( [
+  # Load some initial values into r0-r3.
+  ADDC( 0, 31, 0x1234 ), ADDC( 1, 31, 0x789A ),
+  SHLC( 2, 1, 17 ), SUB( 3, 1, 0 ),
+  # Use 'LDR' to load a previous and subsequent memory address.
+  LDR( 4, 0xFFFF ), LDR( 5, 0x0001 ),
+  # Load the first two words of ROM memory.
+  LD( 6, 31, 0x0000 ), LD( 7, 31, 0x0004 ),
+  # Store the start of RAM address in r29 (0x20000000)
+  ADDC( 29, 31, 0x0001 ), SHLC( 29, 29, 29 ),
+  # Store some initial values in RAM.
+  ST( 0, 29, 0x0000 ), ST( 1, 29, 0x0004 ),
+  ST( 3, 29, 0x0008 ), ST( 2, 29, 0x000C ),
+  # Load the values back out of RAM.
+  LD( 8, 29, 0x0000 ), LD( 9, 29, 0x0004 ),
+  LD( 10, 29, 0x0008 ), LD( 11, 29, 0x000C ),
+  # Check that RAM returns 0 if the address is not word-aligned.
+  LD( 12, 29, 0x0001 ),
+  # Check that values arn't stored in RAM if they aren't word-aligned.
+  ST( 1, 29, 0x0011 ),
   # Done; infinite loop. (r28 = jump address, r29 = r28 + 4)
   BNE( 28, 31, 0 ), JMP( 29, 28 )
 ] )
@@ -475,6 +518,29 @@ cmp_exp = {
   'end': 50
 }
 
+# Expected runtime values for the 'bit-shift operators' test program.
+shift_exp = {
+  # First two instructions set initial values.
+  2:  [ { 'r': 0, 'e': 1 }, { 'r': 1, 'e': -1 } ],
+  # 6 left-shift operations set r2-r7.
+  8:  [
+        { 'r': 2, 'e': 0x00000002 }, { 'r': 3, 'e': 0x00000008 },
+        { 'r': 4, 'e': 0x80000000 }, { 'r': 5, 'e': 0x80000000 },
+        { 'r': 6, 'e': 0xFFFFFFFE }, { 'r': 7, 'e': 0x00000100 },
+      ],
+  # 3 right-shift operations set r8-r10.
+  11: [
+        { 'r': 8,  'e': 0x00000000 }, { 'r': 9, 'e': 0x0000FFFF },
+        { 'r': 10, 'e': 0x00800000 }
+      ],
+  # 3 right-shift operations set r11-r13.
+  14: [
+        { 'r': 11,  'e': 0x00000000 }, { 'r': 12, 'e': 0xFFFFFFFF },
+        { 'r': 13, 'e': 0xFF800000 }
+      ],
+  'end': 15
+}
+
 # Expected runtime values for the 'branch / jump' test program.
 jmp_exp = {
   # First two instructions set initial values.
@@ -507,6 +573,39 @@ jmp_exp = {
   'end': 20
 }
 
+# Expected runtime values for the 'load/store operators' test program.
+ls_exp = {
+  # The first 4 operations set initial values.
+  4:  [
+        { 'r': 0, 'e': 0x00001234 }, { 'r': 1, 'e': 0x0000789A },
+        { 'r': 2, 'e': 0xF1340000 }, { 'r': 3, 'e': 0x00006666 }
+      ],
+  # The next 4 load operations place ROM values into r4-r7.
+  8:  [
+        { 'r': 4, 'e': 0x7C9FFFFF }, { 'r': 5, 'e': 0x60FF0004 },
+        { 'r': 6, 'e': 0xC01F1234 }, { 'r': 7, 'e': 0xC03F789A }
+      ],
+  # The next 2 operations put the 'start of RAM' address in r29.
+  10: [ { 'r': 29, 'e': 0x20000000 } ],
+  # Then, 4 store operations put values into RAM.
+  14: [
+        { 'r': "RAM%d"%( 0x00 ), 'e': 0x00001234 },
+        { 'r': "RAM%d"%( 0x04 ), 'e': 0x0000789A },
+        { 'r': "RAM%d"%( 0x08 ), 'e': 0x00006666 },
+        { 'r': "RAM%d"%( 0x0C ), 'e': 0xF1340000 }
+      ],
+  # Another 4 loads bring the values back out of RAM, into r8-r11.
+  18: [
+        { 'r':  8, 'e': 0x00001234 }, { 'r':  9, 'e': 0x0000789A },
+        { 'r': 10, 'e': 0x00006666 }, { 'r': 11, 'e': 0xF1340000 }
+      ],
+  # A mis-aligned load should return 0.
+  19: [ { 'r': 12, 'e': 0x00000000 } ],
+  # A mis-aligned store to RAM address 0x11 should not set anything.
+  20: [ { 'r': "RAM%d"%( 0x10 ), 'e': 0x00000000 } ],
+  'end': 20
+}
+
 ############################################
 # Collected definitions for test programs. #
 # These are just arrays with string names, #
@@ -518,5 +617,8 @@ quick_test = [ 'quick test', 'cpu_quick', quick_rom, quick_exp ]
 add_test   = [ 'addition test', 'cpu_add', add_rom, add_exp ]
 sub_test   = [ 'subtraction test', 'cpu_sub', sub_rom, sub_exp ]
 bool_test  = [ 'boolean test', 'cpu_bool', bool_rom, bool_exp ]
-cmp_test  = [ 'comparison test', 'cpu_cmp', cmp_rom, cmp_exp ]
-jmp_test  = [ 'branch / jump test', 'cpu_jmp', jmp_rom, jmp_exp ]
+cmp_test   = [ 'comparison test', 'cpu_cmp', cmp_rom, cmp_exp ]
+shift_test = [ 'bit shift test', 'cpu_shift', shift_rom, shift_exp ]
+jmp_test   = [ 'branch / jump test', 'cpu_jmp', jmp_rom, jmp_exp ]
+ls_test    = [ 'load / store test', 'cpu_ls', ls_rom, ls_exp ]
+# (No DIV or MUL tests yet, since those aren't present in RV32I)

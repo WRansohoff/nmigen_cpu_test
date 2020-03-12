@@ -155,7 +155,7 @@ class CPU( Elaboratable ):
               self.ram.ren.eq( 0b1 )
             ]
           with m.Elif( ( self.mp & 0x08000000 ) |
-                       ( self.mp & 0x07FFFFFF ) ):
+                       ( ( self.mp & 0xF8000000 ) == 0 ) ):
             m.d.comb += self.rom.addr.eq( self.mp & 0x07FFFFFF )
           m.next = "CPU_LD"
         # ST "STore" operation: Memory[ Ra + immediate ] = Rc
@@ -241,7 +241,7 @@ class CPU( Elaboratable ):
               ]
               m.d.sync += self.r[ i ].eq( self.ram.dout )
             with m.Elif( ( self.mp & 0x08000000 ) |
-                         ( self.mp & 0x07FFFFFF ) ):
+                         ( self.mp & 0xF8000000 == 0 ) ):
               m.d.comb += self.rom.addr.eq( self.mp & 0x07FFFFFF )
               m.d.sync += self.r[ i ].eq( self.rom.out )
             with m.Else():
@@ -404,4 +404,6 @@ if __name__ == "__main__":
   cpu_sim( sub_test )
   cpu_sim( bool_test )
   cpu_sim( cmp_test )
+  cpu_sim( shift_test )
   cpu_sim( jmp_test )
+  cpu_sim( ls_test )
