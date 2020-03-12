@@ -151,6 +151,46 @@ bool_rom = ROM( [
   LDR( 28, 0x0000 ), JMP( 29, 28 )
 ] )
 
+# Comparison test program: check that 'CMPEQ', 'CMPLE', 'CMPLT'
+# operations work correctly.
+cmp_rom = ROM( [
+  # Load some initial values: r0 = 2, r1 = 7, r2 = -2, r3 = -7
+  ADDC( 0, 31, 2 ), ADDC( 1, 31, 7 ),
+  SUBC( 2, 31, 2 ), SUBC( 3, 31, 7 ),
+  # r4 = 1, r5 = 1, r6 = 1
+  CMPEQ( 4, 0, 0 ), CMPEQ( 5, 2, 2 ), CMPEQC( 6, 1, 7 ),
+  # r7 = 1, r8 = 0, r9 = 0
+  CMPEQC( 7, 3, -7 ), CMPEQ( 8, 0, 1 ), CMPEQ( 9, 0, 2 ),
+  # r10 = 0, r11 = 0, r12 = 0,
+  CMPEQ( 10, 1, 3 ), CMPEQC( 11, 0, -2 ), CMPEQC( 12, 3, 7 ),
+  # r13 = 1, r14 = 0, r15 = 1
+  CMPLE( 13, 0, 1 ), CMPLE( 14, 1, 0 ), CMPLE( 15, 3, 2 ),
+  # r16 = 0, r17 = 1, r18 = 0
+  CMPLE( 16, 2, 3 ), CMPLE( 17, 2, 1 ), CMPLE( 18, 1, 2 ),
+  # r19 = 1, r20 = 1, r21 = 1
+  CMPLE( 19, 0, 0 ), CMPLE( 20, 3, 3 ), CMPLEC( 21, 0, 4 ),
+  # r22 = 1, r23 = 0, r24 = 0
+  CMPLEC( 22, 0, 2 ), CMPLEC( 23, 0, 1 ), CMPLEC( 24, 0, -8 ),
+  # r25 = 1, r26 = 0, r27 = 1
+  CMPLEC( 25, 3, -6 ), CMPLEC( 26, 3, -8 ), CMPLEC( 27, 3, 7 ),
+  # r28 = 1, r29 = 1
+  CMPLEC( 28, 0, 2 ), CMPLEC( 29, 3, -7 ),
+  # r13 = 1, r14 = 0, r15 = 1
+  CMPLT( 13, 0, 1 ), CMPLT( 14, 1, 0 ), CMPLT( 15, 3, 2 ),
+  # r16 = 0, r17 = 1, r18 = 0
+  CMPLT( 16, 2, 3 ), CMPLT( 17, 2, 1 ), CMPLT( 18, 1, 2 ),
+  # r19 = 0, r20 = 0, r21 = 1
+  CMPLT( 19, 0, 0 ), CMPLT( 20, 3, 3 ), CMPLTC( 21, 0, 4 ),
+  # r22 = 0, r23 = 0, r24 = 0
+  CMPLTC( 22, 0, 2 ), CMPLTC( 23, 0, 1 ), CMPLTC( 24, 0, -8 ),
+  # r25 = 1, r26 = 0, r27 = 1
+  CMPLTC( 25, 3, -6 ), CMPLTC( 26, 3, -8 ), CMPLTC( 27, 3, 7 ),
+  # r28 = 0, r29 = 0
+  CMPLTC( 28, 0, 2 ), CMPLTC( 29, 3, -7 ),
+  # Done; infinite loop. (r28 = jump address, r29 = r28 + 4)
+  LDR( 28, 0x0000 ), JMP( 29, 28 )
+] )
+
 ########################################
 # Expected runtime register values for #
 # the CPU test programs defined above: #
@@ -380,6 +420,40 @@ bool_exp = {
   'end': 32
 }
 
+# Expected runtime values for the 'comparison operators' test program.
+cmp_exp = {
+  # The first 4 operations set initial values.
+  4:  [
+        { 'r': 0, 'e':  2 }, { 'r': 1, 'e':  7 },
+        { 'r': 2, 'e': -2 }, { 'r': 3, 'e': -7 }
+      ],
+  # The next 9 operations test CMPEQ and CMPEQC in r4-r12.
+  13: [
+        { 'r':  4, 'e': 1 }, { 'r':  5, 'e': 1 }, { 'r':  6, 'e': 1 },
+        { 'r':  7, 'e': 1 }, { 'r':  8, 'e': 0 }, { 'r':  9, 'e': 0 },
+        { 'r': 10, 'e': 0 }, { 'r': 11, 'e': 0 }, { 'r': 12, 'e': 0 }
+      ],
+  # The next 17 operations test CMPLE and CMPLEC r13-r29.
+  30: [
+        { 'r': 13, 'e': 1 }, { 'r': 14, 'e': 0 }, { 'r': 15, 'e': 1 },
+        { 'r': 16, 'e': 0 }, { 'r': 17, 'e': 1 }, { 'r': 18, 'e': 0 },
+        { 'r': 19, 'e': 1 }, { 'r': 20, 'e': 1 }, { 'r': 21, 'e': 1 },
+        { 'r': 22, 'e': 1 }, { 'r': 23, 'e': 0 }, { 'r': 24, 'e': 0 },
+        { 'r': 25, 'e': 1 }, { 'r': 26, 'e': 0 }, { 'r': 27, 'e': 1 },
+        { 'r': 28, 'e': 1 }, { 'r': 29, 'e': 1 }
+      ],
+  # The next 17 operations test CMPLT and CMPLTC r13-r29.
+  47: [
+        { 'r': 13, 'e': 1 }, { 'r': 14, 'e': 0 }, { 'r': 15, 'e': 1 },
+        { 'r': 16, 'e': 0 }, { 'r': 17, 'e': 1 }, { 'r': 18, 'e': 0 },
+        { 'r': 19, 'e': 0 }, { 'r': 20, 'e': 0 }, { 'r': 21, 'e': 1 },
+        { 'r': 22, 'e': 0 }, { 'r': 23, 'e': 0 }, { 'r': 24, 'e': 0 },
+        { 'r': 25, 'e': 1 }, { 'r': 26, 'e': 0 }, { 'r': 27, 'e': 1 },
+        { 'r': 28, 'e': 0 }, { 'r': 29, 'e': 0 }
+      ],
+  'end': 50
+}
+
 ############################################
 # Collected definitions for test programs. #
 # These are just arrays with string names, #
@@ -391,3 +465,4 @@ quick_test = [ 'quick test', 'cpu_quick', quick_rom, quick_exp ]
 add_test   = [ 'addition test', 'cpu_add', add_rom, add_exp ]
 sub_test   = [ 'subtraction test', 'cpu_sub', sub_rom, sub_exp ]
 bool_test  = [ 'boolean test', 'cpu_bool', bool_rom, bool_exp ]
+cmp_test  = [ 'comparison test', 'cpu_cmp', cmp_rom, cmp_exp ]
